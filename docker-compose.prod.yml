@@ -5,7 +5,8 @@
 #
 # Differences from the default compose file:
 #   - All secrets sourced from .env (gitignored)
-#   - SPRING_PROFILES_ACTIVE=prod → disables DataSeeder, switches ddl-auto to validate,
+#   - Set SPRING_PROFILES_ACTIVE=prod in .env to enable prod profile:
+#     disables DataSeeder, switches ddl-auto to validate,
 #     enables JSON logging, fails fast if JWT_SECRET is the shipped default
 #   - Postgres port 5432 is NOT exposed to the host (accessible only from the Docker network)
 #   - Health checks on backend + frontend (plus restart policy)
@@ -23,7 +24,6 @@ services:
   backend:
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
