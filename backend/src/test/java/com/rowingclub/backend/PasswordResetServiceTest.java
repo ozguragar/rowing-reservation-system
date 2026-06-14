@@ -40,7 +40,7 @@ class PasswordResetServiceTest {
                 .fullName("Reset User")
                 .email("reset_user@test.com")
                 .passwordHash(passwordEncoder.encode("oldpass12"))
-                .role(Role.STUDENT)
+                .role(Role.MEMBER)
                 .build());
     }
 

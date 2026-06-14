@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 const studentUser = { id: 1, fullName: 'S', email: 's@t.com', role: 'STUDENT' as const, isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 };
-const adminUser = { ...studentUser, role: 'ADMIN' as const };
+const adminUser = { ...studentUser, role: 'CLUB_ADMIN' as const };
 
 test('shows spinner while loading', () => {
   mockUseAuth.mockReturnValue({ user: null, isLoading: true, isAuthenticated: false });

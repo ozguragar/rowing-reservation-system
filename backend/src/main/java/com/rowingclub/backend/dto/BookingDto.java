@@ -21,6 +21,7 @@ public class BookingDto {
     private String boatName;
     private Long sessionId;
     private String status;
+    private Boolean isCoxSeat;
     private LocalDateTime createdAt;
 
     public static BookingDto from(Booking booking) {
@@ -34,6 +35,7 @@ public class BookingDto {
                 .boatName(booking.getBoat().getName())
                 .sessionId(booking.getSession().getId())
                 .status(booking.getStatus().name())
+                .isCoxSeat(booking.getIsCoxSeat())
                 .createdAt(booking.getCreatedAt())
                 .build();
     }

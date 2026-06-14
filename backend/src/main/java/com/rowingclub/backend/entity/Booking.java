@@ -36,5 +36,9 @@ public class Booking {
 
     @Column(nullable = false)
     @Builder.Default
+    private Boolean isCoxSeat = false;
+
+    @Column(nullable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }

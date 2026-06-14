@@ -18,6 +18,7 @@ export default function BookingPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [confirmBoat, setConfirmBoat] = useState<Boat | null>(null);
+  const [confirmCoxSeat, setConfirmCoxSeat] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
@@ -53,8 +54,8 @@ export default function BookingPage() {
 
   const now = new Date();
   const isPast4pm = now.getHours() >= 16;
-  const isStudent = user?.role === 'STUDENT';
-  const isClubMember = user?.role === 'CLUB_MEMBER';
+  const isStudent = user?.memberType === 'STUDENT';
+  const isClubMember = user?.memberType === 'RECREATIONAL';
   // Students: blocked before 4pm. Members: after 4pm, tomorrow's sessions are
   // reserved for students; before 4pm, members have no time-of-day restriction.
   const isStudentBlocked = isStudent && !isPast4pm;
@@ -75,11 +76,12 @@ export default function BookingPage() {
     setCurrentDate(d);
   }
 
-  async function handleBook(boat: Boat, sessionId: number) {
+  async function handleBook(boat: Boat, sessionId: number, isCoxSeat = false) {
     setBookingLoading(true);
     try {
-      await api.post('/bookings', { boatId: boat.id, sessionId });
+      await api.post('/bookings', { boatId: boat.id, sessionId, isCoxSeat });
       setConfirmBoat(null);
+      setConfirmCoxSeat(false);
       setSelectedSession(null);
       loadSessions();
     } catch (e: any) {
@@ -88,6 +90,17 @@ export default function BookingPage() {
       setBookingLoading(false);
     }
   }
+
+  const isCoxEligible = user?.isCox || user?.role === 'TRAINER';
+  const coxSeatTaken = (boat: Boat) => boat.bookings?.some(b => b.isCoxSeat) ?? false;
+  const canBookCox = (boat: Boat, sessionDate?: string) => {
+    if (!boat.hasCoxSeat || !isCoxEligible) return false;
+    if (coxSeatTaken(boat)) return false;
+    if (isStudentBlocked) return false;
+    if (isStudent && nextDayOnly && sessionDate && sessionDate !== tomorrowStr()) return false;
+    if (memberBlockedFromTomorrow && sessionDate === tomorrowStr()) return false;
+    return true;
+  };
 
   const canBook = (boat: Boat, sessionDate?: string) => {
     if (isStudentBlocked) return false;
@@ -258,9 +271,14 @@ export default function BookingPage() {
                           'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-primary-300 hover:shadow-sm')}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{boat.name}</span>
-                          {boat.isBasicTrainingBoat && (
-                            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs rounded">Beginner</span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {boat.isBasicTrainingBoat && (
+                              <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs rounded">Beginner</span>
+                            )}
+                            {boat.hasCoxSeat && (
+                              <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs rounded">Cox</span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 mb-3 text-sm text-gray-500 dark:text-gray-400">
                           <Users size={14} />
@@ -272,28 +290,42 @@ export default function BookingPage() {
                           <div className="mb-3 space-y-1">
                             {boat.bookings.map(bk => (
                               <div key={bk.id} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                <span className={bk.userRole === 'STUDENT' ? 'badge-student' : 'badge-member'}>
-                                  {bk.userRole === 'STUDENT' ? 'S' : 'M'}
+                                <span className={bk.isCoxSeat ? 'px-1 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded text-[10px]' : bk.userRole === 'MEMBER' ? 'badge-member' : 'badge-member'}>
+                                  {bk.isCoxSeat ? 'Cox' : bk.userRole === 'MEMBER' ? 'M' : 'M'}
                                 </span>
                                 <span>{bk.userFullName}</span>
                               </div>
                             ))}
                           </div>
                         )}
-                        <button
-                          disabled={isDisabled}
-                          onClick={() => setConfirmBoat(boat)}
-                          data-testid={`book-btn-${boat.id}`}
-                          className={clsx('w-full py-2 rounded-lg text-sm font-medium transition-colors',
-                            isDisabled ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'btn-primary')}>
-                          {isFull
-                            ? 'Full'
-                            : isNextDayBlocked
-                              ? <span className="flex items-center justify-center gap-1"><Lock size={12}/>Tomorrow only</span>
-                              : isGrayed
-                                ? <span className="flex items-center justify-center gap-1"><Lock size={12}/>Training Required</span>
-                                : 'Book Seat'}
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            disabled={isDisabled}
+                            onClick={() => { setConfirmBoat(boat); setConfirmCoxSeat(false); }}
+                            data-testid={`book-btn-${boat.id}`}
+                            className={clsx('w-full py-2 rounded-lg text-sm font-medium transition-colors',
+                              isDisabled ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'btn-primary')}>
+                            {isFull
+                              ? 'Full'
+                              : isNextDayBlocked
+                                ? <span className="flex items-center justify-center gap-1"><Lock size={12}/>Tomorrow only</span>
+                                : isGrayed
+                                  ? <span className="flex items-center justify-center gap-1"><Lock size={12}/>Training Required</span>
+                                  : 'Book Seat'}
+                          </button>
+                          {boat.hasCoxSeat && isCoxEligible && !coxSeatTaken(boat) && (
+                            <button
+                              disabled={!canBookCox(boat, session.date)}
+                              onClick={() => { setConfirmBoat(boat); setConfirmCoxSeat(true); }}
+                              className={clsx('w-full py-2 rounded-lg text-sm font-medium transition-colors',
+                                !canBookCox(boat, session.date) ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white')}>
+                              Book Cox Seat
+                            </button>
+                          )}
+                          {boat.hasCoxSeat && coxSeatTaken(boat) && (
+                            <p className="text-xs text-center text-blue-500 dark:text-blue-400">Cox seat taken</p>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -305,35 +337,36 @@ export default function BookingPage() {
           </div>
         )}
 
-        {confirmBoat && selectedSession === null && displaySessions.length > 0 && (
-          <ConfirmModal boat={confirmBoat} sessionId={displaySessions.find(s => s.boats?.some(b => b.id === confirmBoat.id))?.id || 0}
-            onConfirm={handleBook} onClose={() => setConfirmBoat(null)} loading={bookingLoading} />
-        )}
         {confirmBoat && (
           <ConfirmModal boat={confirmBoat}
             sessionId={displaySessions.find(s => s.boats?.some(b => b.id === confirmBoat.id))?.id || 0}
-            onConfirm={handleBook} onClose={() => setConfirmBoat(null)} loading={bookingLoading} />
+            isCoxSeat={confirmCoxSeat}
+            onConfirm={handleBook} onClose={() => { setConfirmBoat(null); setConfirmCoxSeat(false); }} loading={bookingLoading} />
         )}
       </div>
     </ProtectedRoute>
   );
 }
 
-function ConfirmModal({ boat, sessionId, onConfirm, onClose, loading }: {
-  boat: Boat; sessionId: number; onConfirm: (boat: Boat, sessionId: number) => void;
+function ConfirmModal({ boat, sessionId, isCoxSeat, onConfirm, onClose, loading }: {
+  boat: Boat; sessionId: number; isCoxSeat: boolean; onConfirm: (boat: Boat, sessionId: number, isCoxSeat: boolean) => void;
   onClose: () => void; loading: boolean;
 }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Confirm Booking</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          {isCoxSeat ? 'Confirm Cox Seat Booking' : 'Confirm Booking'}
+        </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Book a seat on <strong>{boat.name}</strong>?
-          <br />1 credit will be deducted from your balance.
+          Book {isCoxSeat ? 'the cox seat' : 'a seat'} on <strong>{boat.name}</strong>?
+          {isCoxSeat
+            ? <><br />No credits will be deducted for cox seats.</>
+            : <><br />1 credit will be deducted from your balance.</>}
         </p>
         <div className="flex gap-3">
           <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-          <button onClick={() => onConfirm(boat, sessionId)} disabled={loading} className="btn-primary flex-1">
+          <button onClick={() => onConfirm(boat, sessionId, isCoxSeat)} disabled={loading} className={clsx('flex-1', isCoxSeat ? 'bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium' : 'btn-primary')}>
             {loading ? 'Booking...' : 'Confirm'}
           </button>
         </div>

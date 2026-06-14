@@ -19,10 +19,12 @@ public class AnalyticsService {
     private final RowingSessionRepository sessionRepository;
     private final BoatRepository boatRepository;
 
-    public List<AnalyticsDto> getOccupancyLast7Days() {
+    public List<AnalyticsDto> getOccupancyLast7Days(Long clubId) {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(7);
-        List<RowingSession> sessions = sessionRepository.findByDateBetween(start, end);
+        List<RowingSession> sessions = clubId != null
+                ? sessionRepository.findByClubIdAndDateBetween(clubId, start, end)
+                : sessionRepository.findByDateBetween(start, end);
 
         List<AnalyticsDto> analytics = new ArrayList<>();
         for (RowingSession session : sessions) {

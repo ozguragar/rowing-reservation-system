@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -22,7 +23,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class AdminController {
 
@@ -36,109 +36,131 @@ public class AdminController {
     private final AdminMessageRepository adminMessageRepository;
     private final AppSettingRepository appSettingRepository;
 
-    // Session Management
     @PostMapping("/sessions")
-    public ResponseEntity<SessionDto> createSession(@Valid @RequestBody CreateSessionRequest request) {
-        return ResponseEntity.ok(sessionService.createSession(request));
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<SessionDto> createSession(@Valid @RequestBody CreateSessionRequest request, Authentication auth) {
+        return ResponseEntity.ok(sessionService.createSession(request, sessionService.getClubForUser(auth.getName())));
     }
 
     @PostMapping("/sessions/bulk")
-    public ResponseEntity<List<SessionDto>> createBulkSessions(@Valid @RequestBody BulkSessionRequest request) {
-        return ResponseEntity.ok(sessionService.createBulkSessions(request.getSessions()));
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<List<SessionDto>> createBulkSessions(@Valid @RequestBody BulkSessionRequest request, Authentication auth) {
+        return ResponseEntity.ok(sessionService.createBulkSessions(request.getSessions(), sessionService.getClubForUser(auth.getName())));
     }
 
     @PostMapping("/sessions/{id}/boats")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<BoatDto> addBoat(@PathVariable Long id, @Valid @RequestBody AddBoatRequest request) {
         return ResponseEntity.ok(sessionService.addBoatToSession(id, request));
     }
 
     @PatchMapping("/sessions/{id}/approve")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<SessionDto> approveSession(@PathVariable Long id) {
         return ResponseEntity.ok(sessionService.approveSession(id));
     }
 
     @PostMapping("/sessions/bulk-approve")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<List<SessionDto>> bulkApprove(@RequestBody List<Long> ids) {
         return ResponseEntity.ok(sessionService.bulkApprove(ids));
     }
 
     @DeleteMapping("/sessions/{id}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<Map<String, String>> deleteSession(@PathVariable Long id) {
         sessionService.deleteSession(id);
         return ResponseEntity.ok(Map.of("message", "Session deleted"));
     }
 
     @PostMapping("/sessions/bulk-delete")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<Map<String, String>> bulkDeleteSessions(@RequestBody List<Long> ids) {
         sessionService.bulkDeleteSessions(ids);
         return ResponseEntity.ok(Map.of("message", "Sessions deleted"));
     }
 
     @DeleteMapping("/boats/{id}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<Map<String, String>> deleteBoat(@PathVariable Long id) {
         sessionService.deleteBoat(id);
         return ResponseEntity.ok(Map.of("message", "Boat deleted"));
     }
 
     @PostMapping("/sessions/copy-day")
-    public ResponseEntity<List<SessionDto>> copyDay(@Valid @RequestBody CopyDayRequest request) {
-        return ResponseEntity.ok(sessionService.copyDaySessions(request.getSourceDate(), request.getTargetDate()));
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<List<SessionDto>> copyDay(@Valid @RequestBody CopyDayRequest request, Authentication auth) {
+        return ResponseEntity.ok(sessionService.copyDaySessions(
+                request.getSourceDate(), request.getTargetDate(),
+                sessionService.getClubForUser(auth.getName())));
     }
 
     @PostMapping("/sessions/copy-week")
-    public ResponseEntity<List<SessionDto>> copyWeek(@Valid @RequestBody CopyWeekRequest request) {
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<List<SessionDto>> copyWeek(@Valid @RequestBody CopyWeekRequest request, Authentication auth) {
         return ResponseEntity.ok(sessionService.copyWeekSessions(
-                request.getSourceWeekStart(), request.getTargetWeekStart()));
+                request.getSourceWeekStart(), request.getTargetWeekStart(),
+                sessionService.getClubForUser(auth.getName())));
     }
 
     @GetMapping("/sessions")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<List<SessionDto>> getAllSessions(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
-        return ResponseEntity.ok(sessionService.getAllSessionsByDateRange(start, end));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        return ResponseEntity.ok(sessionService.getAllSessionsByDateRange(clubId, start, end));
     }
 
-    // Booking Management
     @PostMapping("/bookings")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<BookingDto> adminBook(@Valid @RequestBody AdminBookRequest request) {
         return ResponseEntity.ok(bookingService.adminBookUser(
-                request.getUserId(), request.getBoatId(), request.getSessionId()));
+                request.getUserId(), request.getBoatId(), request.getSessionId(), request.getIsCoxSeat()));
     }
 
     @DeleteMapping("/bookings/{id}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<Map<String, String>> adminRemoveBooking(@PathVariable Long id) {
         bookingService.adminRemoveBooking(id);
         return ResponseEntity.ok(Map.of("message", "Booking removed and credit refunded"));
     }
 
     @PostMapping("/bookings/move")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<BookingDto> adminMoveUser(@Valid @RequestBody AdminMoveRequest request) {
         return ResponseEntity.ok(bookingService.adminMoveUser(
-                request.getUserId(), request.getFromBoatId(), request.getToBoatId()));
+                request.getUserId(), request.getFromBoatId(), request.getToBoatId(), request.getIsCoxSeat()));
     }
 
     @GetMapping("/cancellation-requests")
-    public ResponseEntity<List<BookingDto>> getPendingCancellations() {
-        return ResponseEntity.ok(bookingService.getPendingCancellations());
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<List<BookingDto>> getPendingCancellations(Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        return ResponseEntity.ok(bookingService.getPendingCancellations(clubId));
     }
 
     @PostMapping("/cancellation-requests/{id}/approve")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<BookingDto> approveCancellation(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.approveCancellation(id));
     }
 
     @PostMapping("/cancellation-requests/{id}/deny")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
     public ResponseEntity<BookingDto> denyCancellation(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.denyCancellation(id));
     }
 
-    // Ledger Management
     @GetMapping("/ledger/{userId}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<List<LedgerDto>> getUserLedger(@PathVariable Long userId) {
         return ResponseEntity.ok(ledgerService.getUserLedger(userId));
     }
 
     @PostMapping("/ledger/{userId}/credit")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<LedgerDto> addCredit(
             @PathVariable Long userId, @Valid @RequestBody AddCreditRequest request) {
         return ResponseEntity.ok(ledgerService.addCredit(
@@ -146,6 +168,7 @@ public class AdminController {
     }
 
     @PostMapping("/ledger/{userId}/deduct")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<LedgerDto> deductCredit(
             @PathVariable Long userId, @Valid @RequestBody AddCreditRequest request) {
         return ResponseEntity.ok(ledgerService.deductCredit(
@@ -153,6 +176,7 @@ public class AdminController {
     }
 
     @PatchMapping("/ledger/entry/{entryId}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<LedgerDto> updateLedgerEntry(
             @PathVariable Long entryId, @RequestBody Map<String, String> body) {
         LocalDateTime expiration = body.get("expirationDate") != null
@@ -160,32 +184,37 @@ public class AdminController {
         return ResponseEntity.ok(ledgerService.updateLedgerEntry(entryId, expiration));
     }
 
-    // User Management
     @GetMapping("/users")
-    public ResponseEntity<List<UserDto>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<List<UserDto>> getAllUsers(Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        return ResponseEntity.ok(userService.getAllUsers(clubId));
     }
 
     @GetMapping("/users/search")
-    public ResponseEntity<List<UserDto>> searchUsers(@RequestParam String q) {
-        return ResponseEntity.ok(userService.searchUsers(q));
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN', 'TRAINER')")
+    public ResponseEntity<List<UserDto>> searchUsers(@RequestParam String q, Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        return ResponseEntity.ok(userService.searchUsers(clubId, q));
     }
 
     @PatchMapping("/users/{id}/basic-training")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<UserDto> setBasicTraining(
             @PathVariable Long id, @RequestBody Map<String, Boolean> body) {
         boolean finished = Boolean.TRUE.equals(body.get("finished"));
         return ResponseEntity.ok(userService.setBasicTrainingFinished(id, finished));
     }
 
-    // Analytics
     @GetMapping("/analytics/occupancy")
-    public ResponseEntity<List<AnalyticsDto>> getOccupancyAnalytics() {
-        return ResponseEntity.ok(analyticsService.getOccupancyLast7Days());
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<List<AnalyticsDto>> getOccupancyAnalytics(Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        return ResponseEntity.ok(analyticsService.getOccupancyLast7Days(clubId));
     }
 
-    // Audit Logs
     @GetMapping("/audit-logs")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<List<AuditLog>> getAuditLogs(
             @RequestParam(required = false) String filter) {
         if (filter != null && !filter.isBlank()) {
@@ -198,13 +227,18 @@ public class AdminController {
         return ResponseEntity.ok(auditLogRepository.findAllByOrderByTimestampDesc());
     }
 
-    // Admin Messages
     @GetMapping("/messages")
-    public ResponseEntity<List<AdminMessage>> getMessages() {
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<List<AdminMessage>> getMessages(Authentication auth) {
+        Long clubId = sessionService.getClubIdForUser(auth.getName());
+        if (clubId != null) {
+            return ResponseEntity.ok(adminMessageRepository.findByClubIdAndIsResolvedFalseOrderByCreatedAtDesc(clubId));
+        }
         return ResponseEntity.ok(adminMessageRepository.findByIsResolvedFalseOrderByCreatedAtDesc());
     }
 
     @PatchMapping("/messages/{id}/resolve")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, String>> resolveMessage(@PathVariable Long id) {
         AdminMessage msg = adminMessageRepository.findById(id).orElseThrow();
         msg.setIsResolved(true);
@@ -212,8 +246,8 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", "Message resolved"));
     }
 
-    // Settings
     @GetMapping("/settings")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, String>> getSettings() {
         List<AppSetting> settings = appSettingRepository.findAll();
         Map<String, String> map = new java.util.HashMap<>();
@@ -222,6 +256,7 @@ public class AdminController {
     }
 
     @PutMapping("/settings/{key}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, String>> updateSetting(
             @PathVariable String key, @RequestBody Map<String, String> body) {
         AppSetting setting = appSettingRepository.findById(key)
@@ -231,8 +266,8 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", "Setting updated"));
     }
 
-    // Auto-scheduler
     @PostMapping("/scheduler/run")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> runScheduler(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart) {
         var result = autoSchedulerService.runScheduler(weekStart);

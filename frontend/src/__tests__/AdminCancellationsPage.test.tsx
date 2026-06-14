@@ -14,7 +14,7 @@ jest.mock('@/context/DialogContext', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: 'ADMIN', fullName: 'Admin', email: 'a@a.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 }, isLoading: false, isAuthenticated: true }),
+  useAuth: () => ({ user: { id: 1, role: 'CLUB_ADMIN', fullName: 'Admin', email: 'a@a.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, featureCancellation: true, featureAutoScheduler: true }, isLoading: false, isAuthenticated: true }),
   AuthProvider: ({ children }: any) => <>{children}</>,
 }));
 

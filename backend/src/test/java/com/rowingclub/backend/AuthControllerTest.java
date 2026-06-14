@@ -32,7 +32,7 @@ class AuthControllerTest {
                                 "fullName", "Test User",
                                 "email", "ctrl_register@test.com",
                                 "password", "password1",
-                                "role", "STUDENT"
+                                "role", "MEMBER"
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())

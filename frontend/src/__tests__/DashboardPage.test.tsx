@@ -33,7 +33,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const studentUser = { id: 1, fullName: 'Alice', email: 'alice@test.com', role: 'STUDENT' as const, isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 5 };
-const adminUser = { ...studentUser, role: 'ADMIN' as const, fullName: 'Admin User' };
+const adminUser = { ...studentUser, role: 'CLUB_ADMIN' as const, fullName: 'Admin User', featureCancellation: true, featureAutoScheduler: true };
 
 function makeBooking(status = 'MANUAL') {
   return { id: 10, userId: 1, userFullName: 'Alice', userEmail: 'alice@test.com', userRole: 'STUDENT', boatId: 1, boatName: 'Boat A', sessionId: 1, status, createdAt: '2026-04-17T10:00:00' };

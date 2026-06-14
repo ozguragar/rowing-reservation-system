@@ -2,6 +2,7 @@ package com.rowingclub.backend.service;
 
 import com.rowingclub.backend.dto.*;
 import com.rowingclub.backend.entity.User;
+import com.rowingclub.backend.enums.MemberType;
 import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.exception.BusinessException;
 import com.rowingclub.backend.repository.UserRepository;
@@ -25,7 +26,8 @@ public class AuthService {
             throw new BusinessException("Email already registered");
         }
 
-        Role role = Role.STUDENT;
+        Role role = Role.MEMBER;
+        MemberType memberType = MemberType.DEFAULT;
         if (request.getRole() != null) {
             try {
                 role = Role.valueOf(request.getRole().toUpperCase());
@@ -37,9 +39,11 @@ public class AuthService {
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(role)
+                .memberType(memberType)
                 .isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false)
                 .lessonsAttended(0)
+                .isCox(false)
                 .build();
 
         String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getRole().name());

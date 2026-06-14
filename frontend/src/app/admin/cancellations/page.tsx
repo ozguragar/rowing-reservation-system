@@ -58,8 +58,8 @@ export default function CancellationsPage() {
               <div key={b.id} className="card flex items-center justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={b.userRole === 'STUDENT' ? 'badge-student' : 'badge-member'}>
-                      {b.userRole === 'STUDENT' ? 'S' : b.userRole === 'CLUB_MEMBER' ? 'M' : 'A'}
+                    <span className={b.userRole === 'MEMBER' ? 'badge-member' : b.userRole === 'TRAINER' ? 'badge-student' : 'badge-member'}>
+                      {b.userRole === 'MEMBER' ? 'M' : b.userRole === 'TRAINER' ? 'T' : 'A'}
                     </span>
                     <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{b.userFullName}</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{b.userEmail}</span>

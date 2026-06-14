@@ -28,4 +28,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findActiveBookingsBetween(@Param("start") LocalDate start, @Param("end") LocalDate end);
 
     List<Booking> findByStatusOrderByCreatedAtAsc(BookingStatus status);
+
+    @Query("SELECT b FROM Booking b WHERE b.status = :status AND b.session.club.id = :clubId ORDER BY b.createdAt ASC")
+    List<Booking> findByStatusAndClubIdOrderByCreatedAtAsc(@Param("status") BookingStatus status, @Param("clubId") Long clubId);
 }

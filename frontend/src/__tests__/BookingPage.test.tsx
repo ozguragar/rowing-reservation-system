@@ -17,8 +17,9 @@ jest.mock('@/context/DialogContext', () => ({
   useDialog: () => ({ toast: jest.fn(), confirm: jest.fn() }),
 }));
 
-const currentUser: { role: 'STUDENT' | 'CLUB_MEMBER'; isFinishedBasicTraining: boolean } = {
-  role: 'CLUB_MEMBER',
+const currentUser: { role: 'MEMBER'; memberType: 'STUDENT' | 'RECREATIONAL'; isFinishedBasicTraining: boolean } = {
+  role: 'MEMBER',
+  memberType: 'RECREATIONAL',
   isFinishedBasicTraining: true,
 };
 jest.mock('@/context/AuthContext', () => ({
@@ -113,7 +114,7 @@ async function advanceDays(n: number) {
 
 describe('BookingPage — club member after 4pm', () => {
   beforeEach(() => {
-    currentUser.role = 'CLUB_MEMBER';
+    currentUser.memberType = 'RECREATIONAL';
     currentUser.isFinishedBasicTraining = true;
     freezeTime(18);   // past the 4pm cutoff
   });
@@ -140,7 +141,7 @@ describe('BookingPage — club member after 4pm', () => {
 
 describe('BookingPage — club member before 4pm', () => {
   beforeEach(() => {
-    currentUser.role = 'CLUB_MEMBER';
+    currentUser.memberType = 'RECREATIONAL';
     currentUser.isFinishedBasicTraining = true;
     freezeTime(9);
   });
@@ -165,7 +166,7 @@ describe('BookingPage — club member before 4pm', () => {
 
 describe('BookingPage — student before 4pm', () => {
   beforeEach(() => {
-    currentUser.role = 'STUDENT';
+    currentUser.memberType = 'STUDENT';
     currentUser.isFinishedBasicTraining = true;
     freezeTime(9);
   });

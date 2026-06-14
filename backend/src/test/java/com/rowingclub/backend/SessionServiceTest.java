@@ -5,8 +5,10 @@ import com.rowingclub.backend.dto.CreateSessionRequest;
 import com.rowingclub.backend.entity.*;
 import com.rowingclub.backend.enums.*;
 import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.repository.*;
 import com.rowingclub.backend.service.SessionService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,16 +29,30 @@ class SessionServiceTest {
     @Autowired private SessionService sessionService;
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private BoatRepository boatRepository;
+    @Autowired private ClubRepository clubRepository;
+
+    private Club testClub;
 
     // Use dates >14 days out to avoid DataSeeder-seeded sessions
     private static final int OFFSET = 50;
+
+    @BeforeEach
+    void setUp() {
+        testClub = clubRepository.save(Club.builder()
+                .name("SessionServiceTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
+    }
 
     private RowingSession makeSession(LocalDate date) {
         CreateSessionRequest req = new CreateSessionRequest();
         req.setDate(date);
         req.setStartTime(LocalTime.of(8, 0));
         req.setEndTime(LocalTime.of(9, 0));
-        var dto = sessionService.createSession(req);
+        var dto = sessionService.createSession(req, testClub);
         return sessionRepository.findById(dto.getId()).orElseThrow();
     }
 
@@ -46,7 +62,7 @@ class SessionServiceTest {
         req.setDate(LocalDate.now().plusDays(OFFSET + 1));
         req.setStartTime(LocalTime.of(6, 20));
         req.setEndTime(LocalTime.of(7, 20));
-        var dto = sessionService.createSession(req);
+        var dto = sessionService.createSession(req, testClub);
         assertEquals("DRAFT", dto.getStatus());
     }
 
@@ -102,7 +118,7 @@ class SessionServiceTest {
                 .isBasicTrainingBoat(false).currentBookings(0).name("4x A").build());
 
         LocalDate target = LocalDate.now().plusDays(OFFSET + 7);
-        var copies = sessionService.copyDaySessions(source, target);
+        var copies = sessionService.copyDaySessions(source, target, null);
 
         assertEquals(1, copies.size());
         assertEquals(target, copies.get(0).getDate());
@@ -118,7 +134,7 @@ class SessionServiceTest {
         makeSession(weekStart.plusDays(3));
 
         LocalDate targetWeek = LocalDate.now().plusDays(OFFSET + 20);
-        var copies = sessionService.copyWeekSessions(weekStart, targetWeek);
+        var copies = sessionService.copyWeekSessions(weekStart, targetWeek, null);
 
         assertEquals(3, copies.size());
         assertTrue(copies.stream().allMatch(s -> "DRAFT".equals(s.getStatus())));

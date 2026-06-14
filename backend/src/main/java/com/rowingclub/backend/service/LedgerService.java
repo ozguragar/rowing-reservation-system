@@ -42,6 +42,7 @@ public class LedgerService {
 
         FinancialLedger entry = FinancialLedger.builder()
                 .user(user)
+                .club(user.getClub())
                 .amount(amount)
                 .reason(reason != null ? reason : "Credit added by admin")
                 .runningBalance(newBalance)
@@ -66,6 +67,7 @@ public class LedgerService {
 
         FinancialLedger entry = FinancialLedger.builder()
                 .user(user)
+                .club(user.getClub())
                 .amount(amount.negate())
                 .reason(reason)
                 .runningBalance(newBalance)
@@ -85,6 +87,7 @@ public class LedgerService {
 
         FinancialLedger entry = FinancialLedger.builder()
                 .user(user)
+                .club(user.getClub())
                 .amount(amount)
                 .reason(reason)
                 .runningBalance(newBalance)

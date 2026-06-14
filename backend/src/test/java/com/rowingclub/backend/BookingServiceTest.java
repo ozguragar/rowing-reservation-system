@@ -36,7 +36,9 @@ class BookingServiceTest {
     @Autowired private FinancialLedgerRepository ledgerRepository;
     @Autowired private AppSettingRepository appSettingRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ClubRepository clubRepository;
 
+    private Club club;
     private User beginnerUser;
     private User trainedUser;
     private RowingSession session;
@@ -45,6 +47,13 @@ class BookingServiceTest {
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("BookingServiceTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         appSettingRepository.save(AppSetting.builder()
                 .settingKey("show_booked_members").settingValue("true").build());
         appSettingRepository.save(AppSetting.builder()
@@ -56,26 +65,29 @@ class BookingServiceTest {
                 .settingKey("allow_cancellations").settingValue("true").build());
 
         beginnerUser = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Beginner User")
                 .email("beginner@test.com")
                 .passwordHash(passwordEncoder.encode("pass123"))
-                .role(Role.STUDENT)
+                .role(Role.MEMBER)
                 .isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false)
                 .lessonsAttended(0)
                 .build());
 
         trainedUser = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Trained User")
                 .email("trained@test.com")
                 .passwordHash(passwordEncoder.encode("pass123"))
-                .role(Role.STUDENT)
+                .role(Role.MEMBER)
                 .isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false)
                 .lessonsAttended(10)
                 .build());
 
         session = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 // Use Istanbul-tomorrow so role-based date checks (which compute
                 // tomorrow against Europe/Istanbul) see this fixture as "tomorrow"
                 // regardless of the JVM's default timezone.
@@ -105,12 +117,12 @@ class BookingServiceTest {
 
         // Give both users credits
         ledgerRepository.save(FinancialLedger.builder()
-                .user(beginnerUser).amount(BigDecimal.TEN)
+                .club(club).user(beginnerUser).amount(BigDecimal.TEN)
                 .reason("Test credits").runningBalance(BigDecimal.TEN)
                 .timestamp(LocalDateTime.now()).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(trainedUser).amount(BigDecimal.TEN)
+                .club(club).user(trainedUser).amount(BigDecimal.TEN)
                 .reason("Test credits").runningBalance(BigDecimal.TEN)
                 .timestamp(LocalDateTime.now()).build());
     }
@@ -168,13 +180,14 @@ class BookingServiceTest {
     @Test
     void cannotBookWithZeroCredits() {
         User brokeUser = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Broke User").email("broke@test.com")
                 .passwordHash(passwordEncoder.encode("pass123"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(brokeUser).amount(BigDecimal.ZERO)
+                .club(club).user(brokeUser).amount(BigDecimal.ZERO)
                 .reason("No credits").runningBalance(BigDecimal.ZERO)
                 .timestamp(LocalDateTime.now()).build());
 
@@ -302,13 +315,14 @@ class BookingServiceTest {
     @Test
     void adminBookUserRequiresCredit() {
         User brokeUser = userRepository.save(User.builder()
+                .club(club)
                 .fullName("No Credit").email("nocredit@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         assertThrows(BusinessException.class,
-                () -> bookingService.adminBookUser(brokeUser.getId(), basicBoat.getId(), session.getId()));
+                () -> bookingService.adminBookUser(brokeUser.getId(), basicBoat.getId(), session.getId(), false));
     }
 
     @Test
@@ -323,7 +337,7 @@ class BookingServiceTest {
         bookingService.bookSeat(beginnerUser.getEmail(), request);
 
         assertThrows(BusinessException.class,
-                () -> bookingService.adminMoveUser(beginnerUser.getId(), basicBoat.getId(), fullBoat.getId()));
+                () -> bookingService.adminMoveUser(beginnerUser.getId(), basicBoat.getId(), fullBoat.getId(), false));
     }
 
     @Test
@@ -354,17 +368,19 @@ class BookingServiceTest {
                 .settingKey("booking_hour_disabled").settingValue("true").build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Bypass Member").email("bypass_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         // Session is >1 day out — would normally be blocked for member before hour
         RowingSession futureSession = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(5))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.APPROVED).build());
@@ -392,16 +408,18 @@ class BookingServiceTest {
                 .settingKey("student_booking_hour").settingValue("23").build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Before Hour Member").email("before_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         RowingSession futureSession = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(5))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.APPROVED).build());
@@ -427,13 +445,14 @@ class BookingServiceTest {
                 .settingKey("student_booking_hour").settingValue("23").build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("NextDay Member").email("nextday_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         BookingRequest req = new BookingRequest();
@@ -451,13 +470,14 @@ class BookingServiceTest {
                 .settingKey("student_booking_hour").settingValue("0").build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("After Hour Member").email("after_tomorrow_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         // Session fixture is for tomorrow; member after cutoff must be rejected
@@ -476,16 +496,18 @@ class BookingServiceTest {
                 .settingKey("student_booking_hour").settingValue("0").build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("After Member").email("after_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         RowingSession futureSession = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(5))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.APPROVED).build());

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LogOut, LayoutDashboard, Calendar, Wallet, Clock, BarChart3,
-  FileText, Users, Zap, Menu, X, Inbox, Settings,
+  FileText, Users, Zap, Menu, X, Inbox, Settings, Building2,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -27,8 +27,9 @@ export default function Navbar() {
 
   if (!user) return null;
 
-  const isAdmin = user.role === 'ADMIN';
-  const availabilityDisabled = settings.disable_availability === 'true';
+  const isAdmin = user.role === 'CLUB_ADMIN' || user.role === 'SUPERADMIN' || user.role === 'TRAINER';
+  const isSuperadmin = user.role === 'SUPERADMIN';
+  const availabilityDisabled = settings.disable_availability === 'true' || user.featureAvailabilityModule === false;
 
   const userLinksAll = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,15 +53,24 @@ export default function Navbar() {
     { href: '/admin/settings', label: 'System', icon: Settings },
   ];
 
-  const links = isAdmin ? adminLinks : userLinks;
+  const superadminLinks = [
+    { href: '/superadmin', label: 'Clubs', icon: Building2 },
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin/planner', label: 'Planner', icon: Calendar },
+    { href: '/admin/members', label: 'Members', icon: Users },
+    { href: '/admin/logs', label: 'Logs', icon: FileText },
+    { href: '/admin/settings', label: 'System', icon: Settings },
+  ];
+
+  const links = isSuperadmin ? superadminLinks : isAdmin ? adminLinks : userLinks;
 
   const roleBadge = (
     <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium',
-      user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200' :
-      user.role === 'STUDENT' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' :
+      (user.role === 'CLUB_ADMIN' || user.role === 'SUPERADMIN') ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200' :
+      user.role === 'TRAINER' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' :
       'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
     )}>
-      {user.role === 'CLUB_MEMBER' ? 'Member' : user.role.charAt(0) + user.role.slice(1).toLowerCase()}
+      {user.role === 'CLUB_ADMIN' ? 'Admin' : user.role === 'SUPERADMIN' ? 'Superadmin' : user.role.charAt(0) + user.role.slice(1).toLowerCase()}
     </span>
   );
 

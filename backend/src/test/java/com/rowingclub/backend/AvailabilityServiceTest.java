@@ -28,19 +28,29 @@ class AvailabilityServiceTest {
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private UserAvailabilityRepository availabilityRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ClubRepository clubRepository;
 
+    private Club club;
     private User user;
     private RowingSession session;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("AvailabilityServiceTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         user = userRepository.save(User.builder()
                 .fullName("Avail User").email("avail@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.STUDENT).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         session = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(1))
                 .startTime(LocalTime.of(8, 0))
                 .endTime(LocalTime.of(9, 0))
@@ -80,6 +90,7 @@ class AvailabilityServiceTest {
     void getWeekSessionsReturnsOnlyWithinWeek() {
         LocalDate monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
         sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(monday).startTime(LocalTime.of(8, 0))
                 .endTime(LocalTime.of(9, 0)).status(SessionStatus.APPROVED).build());
 

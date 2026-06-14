@@ -20,6 +20,7 @@ public class SessionDto {
     private LocalTime endTime;
     private String status;
     private List<BoatDto> boats;
+    private String clubName;
 
     public static SessionDto from(RowingSession session) {
         return SessionDto.builder()
@@ -28,6 +29,7 @@ public class SessionDto {
                 .startTime(session.getStartTime())
                 .endTime(session.getEndTime())
                 .status(session.getStatus().name())
+                .clubName(session.getClub() != null ? session.getClub().getName() : null)
                 .build();
     }
 }

@@ -38,7 +38,7 @@ class SettingsControllerTest {
         User member = userRepository.save(User.builder()
                 .fullName("Settings User").email("settings_user@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.STUDENT).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
         userToken = jwtService.generateAccessToken(member.getEmail(), member.getRole().name());
     }

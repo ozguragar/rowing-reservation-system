@@ -3,6 +3,7 @@ package com.rowingclub.backend.service;
 import com.rowingclub.backend.entity.*;
 import com.rowingclub.backend.enums.BoatType;
 import com.rowingclub.backend.enums.BookingStatus;
+import com.rowingclub.backend.enums.MemberType;
 import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.event.SchedulerCompletedEvent;
 import com.rowingclub.backend.repository.*;
@@ -40,6 +41,8 @@ public class AutoSchedulerService {
         int totalBoatsUsed = 0;
 
         for (RowingSession session : sessions) {
+            if (session.getClub() != null && !session.getClub().getFeatureAutoScheduler()) continue;
+
             List<Boat> eligibleBoats = boatRepository.findBySessionId(session.getId()).stream()
                     .filter(b -> b.getType() == BoatType.COASTAL && b.getCapacity() == 4)
                     .filter(b -> b.getCurrentBookings() == 0)
@@ -51,7 +54,7 @@ public class AutoSchedulerService {
 
             List<User> availableStudents = availabilities.stream()
                     .map(UserAvailability::getUser)
-                    .filter(u -> u.getRole() == Role.STUDENT)
+                    .filter(u -> u.getRole() == Role.MEMBER && u.getMemberType() == MemberType.STUDENT)
                     .filter(u -> !bookingRepository.existsByUserIdAndSessionIdAndStatusNot(
                             u.getId(), session.getId(), BookingStatus.CANCELED))
                     .filter(u -> ledgerService.getBalance(u.getId()).compareTo(BigDecimal.ONE) >= 0)
@@ -59,7 +62,7 @@ public class AutoSchedulerService {
 
             List<User> availableClubMembers = availabilities.stream()
                     .map(UserAvailability::getUser)
-                    .filter(u -> u.getRole() == Role.CLUB_MEMBER)
+                    .filter(u -> u.getRole() == Role.MEMBER && u.getMemberType() != MemberType.STUDENT)
                     .filter(u -> !bookingRepository.existsByUserIdAndSessionIdAndStatusNot(
                             u.getId(), session.getId(), BookingStatus.CANCELED))
                     .filter(u -> ledgerService.getBalance(u.getId()).compareTo(BigDecimal.ONE) >= 0)

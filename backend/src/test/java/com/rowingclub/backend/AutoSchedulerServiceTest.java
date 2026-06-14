@@ -34,13 +34,23 @@ class AutoSchedulerServiceTest {
     @Autowired private FinancialLedgerRepository ledgerRepository;
     @Autowired private BookingRepository bookingRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ClubRepository clubRepository;
 
+    private Club club;
     private RowingSession session;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("AutoSchedulerServiceTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         LocalDate date = LocalDate.now().plusDays(2);
         session = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(date).startTime(LocalTime.of(8, 0))
                 .endTime(LocalTime.of(9, 0)).status(SessionStatus.APPROVED).build());
     }
@@ -67,14 +77,15 @@ class AutoSchedulerServiceTest {
         // Create 4 students with availability and credits
         for (int i = 0; i < 4; i++) {
             User student = userRepository.save(User.builder()
+                    .club(club)
                     .fullName("Sched Student " + i)
                     .email("sched_student" + i + "@test.com")
                     .passwordHash(passwordEncoder.encode("pass"))
-                    .role(Role.STUDENT).isFinishedBasicTraining(true)
+                    .role(Role.MEMBER).isFinishedBasicTraining(true)
                     .isOnSchoolTeam(false).lessonsAttended(0).build());
 
             ledgerRepository.save(FinancialLedger.builder()
-                    .user(student).amount(BigDecimal.TEN)
+                    .club(club).user(student).amount(BigDecimal.TEN)
                     .reason("Credits").runningBalance(BigDecimal.TEN)
                     .timestamp(LocalDateTime.now()).build());
 
@@ -113,14 +124,15 @@ class AutoSchedulerServiceTest {
         // Create 7 students (should be: 4 in one boat, 3 in another)
         for (int i = 0; i < 7; i++) {
             User student = userRepository.save(User.builder()
+                    .club(club)
                     .fullName("SevenStudent " + i)
                     .email("seven_student" + i + "@test.com")
                     .passwordHash(passwordEncoder.encode("pass"))
-                    .role(Role.STUDENT).isFinishedBasicTraining(true)
+                    .role(Role.MEMBER).isFinishedBasicTraining(true)
                     .isOnSchoolTeam(false).lessonsAttended(0).build());
 
             ledgerRepository.save(FinancialLedger.builder()
-                    .user(student).amount(BigDecimal.TEN)
+                    .club(club).user(student).amount(BigDecimal.TEN)
                     .reason("Credits").runningBalance(BigDecimal.TEN)
                     .timestamp(LocalDateTime.now()).build());
 
@@ -146,14 +158,15 @@ class AutoSchedulerServiceTest {
         // 4 students and 4 club members
         for (int i = 0; i < 4; i++) {
             User student = userRepository.save(User.builder()
+                    .club(club)
                     .fullName("Mix Student " + i)
                     .email("mix_student" + i + "@test.com")
                     .passwordHash(passwordEncoder.encode("pass"))
-                    .role(Role.STUDENT).isFinishedBasicTraining(true)
+                    .role(Role.MEMBER).isFinishedBasicTraining(true)
                     .isOnSchoolTeam(false).lessonsAttended(0).build());
 
             ledgerRepository.save(FinancialLedger.builder()
-                    .user(student).amount(BigDecimal.TEN)
+                    .club(club).user(student).amount(BigDecimal.TEN)
                     .reason("Credits").runningBalance(BigDecimal.TEN)
                     .timestamp(LocalDateTime.now()).build());
 
@@ -161,14 +174,15 @@ class AutoSchedulerServiceTest {
                     .user(student).session(session).build());
 
             User member = userRepository.save(User.builder()
+                    .club(club)
                     .fullName("Mix Member " + i)
                     .email("mix_member" + i + "@test.com")
                     .passwordHash(passwordEncoder.encode("pass"))
-                    .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                    .role(Role.MEMBER).isFinishedBasicTraining(true)
                     .isOnSchoolTeam(false).lessonsAttended(0).build());
 
             ledgerRepository.save(FinancialLedger.builder()
-                    .user(member).amount(BigDecimal.TEN)
+                    .club(club).user(member).amount(BigDecimal.TEN)
                     .reason("Credits").runningBalance(BigDecimal.TEN)
                     .timestamp(LocalDateTime.now()).build());
 
@@ -200,14 +214,15 @@ class AutoSchedulerServiceTest {
 
         for (int i = 0; i < 4; i++) {
             User student = userRepository.save(User.builder()
+                    .club(club)
                     .fullName("Ignore Student " + i)
                     .email("ignore_student" + i + "@test.com")
                     .passwordHash(passwordEncoder.encode("pass"))
-                    .role(Role.STUDENT).isFinishedBasicTraining(true)
+                    .role(Role.MEMBER).isFinishedBasicTraining(true)
                     .isOnSchoolTeam(false).lessonsAttended(0).build());
 
             ledgerRepository.save(FinancialLedger.builder()
-                    .user(student).amount(BigDecimal.TEN)
+                    .club(club).user(student).amount(BigDecimal.TEN)
                     .reason("Credits").runningBalance(BigDecimal.TEN)
                     .timestamp(LocalDateTime.now()).build());
 

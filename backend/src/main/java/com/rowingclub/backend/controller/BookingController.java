@@ -36,7 +36,7 @@ public class BookingController {
 
     @GetMapping("/boat/{boatId}")
     public ResponseEntity<?> getBoatBookings(@PathVariable Long boatId) {
-        if (bookingService.isShowBookedMembers()) {
+        if (bookingService.isShowBookedMembers(boatId)) {
             return ResponseEntity.ok(bookingService.getBookingsForBoat(boatId));
         }
         return ResponseEntity.ok(Map.of("message", "Member visibility is disabled by admin"));

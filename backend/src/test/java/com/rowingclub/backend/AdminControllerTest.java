@@ -36,22 +36,33 @@ class AdminControllerTest {
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private JwtService jwtService;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ClubRepository clubRepository;
 
+    private Club club;
     private String adminToken;
     private String memberToken;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("AdminControllerTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         User admin = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Admin").email("admin_ctrl@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.ADMIN).isFinishedBasicTraining(true)
+                .role(Role.CLUB_ADMIN).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         User member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Member").email("member_ctrl@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         adminToken = jwtService.generateAccessToken(admin.getEmail(), admin.getRole().name());
@@ -133,6 +144,7 @@ class AdminControllerTest {
     @Test
     void adminCanBulkApprove() throws Exception {
         RowingSession s = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(3))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.DRAFT).build());
@@ -155,7 +167,7 @@ class AdminControllerTest {
         User other = userRepository.save(User.builder()
                 .fullName("Other").email("bt_other@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(com.rowingclub.backend.enums.Role.STUDENT)
+                .role(com.rowingclub.backend.enums.Role.MEMBER)
                 .isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
@@ -171,7 +183,7 @@ class AdminControllerTest {
         User other = userRepository.save(User.builder()
                 .fullName("Flip User").email("bt_flip@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(com.rowingclub.backend.enums.Role.STUDENT)
+                .role(com.rowingclub.backend.enums.Role.MEMBER)
                 .isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 

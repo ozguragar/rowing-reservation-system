@@ -8,7 +8,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: 'ADMIN', fullName: 'A', email: 'a@t.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 }, isLoading: false, isAuthenticated: true }),
+  useAuth: () => ({ user: { id: 1, role: 'CLUB_ADMIN', fullName: 'A', email: 'a@t.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, featureCancellation: true, featureAutoScheduler: true }, isLoading: false, isAuthenticated: true }),
   AuthProvider: ({ children }: any) => <>{children}</>,
 }));
 
@@ -16,10 +16,10 @@ jest.mock('@/lib/api', () => ({
   __esModule: true,
   default: {
     get: jest.fn().mockResolvedValue({ data: [
-      { id: 2, fullName: 'Alice Smith', email: 'alice@test.com', role: 'STUDENT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 10, creditBalance: 8, earliestCreditExpiration: '2026-06-01T23:59:00' },
-      { id: 3, fullName: 'Bob Jones', email: 'bob@test.com', role: 'CLUB_MEMBER', isFinishedBasicTraining: false, isOnSchoolTeam: false, lessonsAttended: 2, creditBalance: 0, earliestCreditExpiration: null },
-      { id: 4, fullName: 'Charlie Zed', email: 'charlie@example.org', role: 'CLUB_MEMBER', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 20, creditBalance: 12, earliestCreditExpiration: '2026-05-15T23:59:00' },
-      { id: 99, fullName: 'Admin One', email: 'admin1@test.com', role: 'ADMIN', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, creditBalance: 0 },
+      { id: 2, fullName: 'Alice Smith', email: 'alice@test.com', role: 'MEMBER', memberType: 'STUDENT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 10, creditBalance: 8, earliestCreditExpiration: '2026-06-01T23:59:00' },
+      { id: 3, fullName: 'Bob Jones', email: 'bob@test.com', role: 'MEMBER', memberType: 'DEFAULT', isFinishedBasicTraining: false, isOnSchoolTeam: false, lessonsAttended: 2, creditBalance: 0, earliestCreditExpiration: null },
+      { id: 4, fullName: 'Charlie Zed', email: 'charlie@example.org', role: 'MEMBER', memberType: 'DEFAULT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 20, creditBalance: 12, earliestCreditExpiration: '2026-05-15T23:59:00' },
+      { id: 99, fullName: 'Admin One', email: 'admin1@test.com', role: 'CLUB_ADMIN', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, creditBalance: 0 },
     ] }),
     interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
   },
@@ -48,12 +48,13 @@ test('search filters by email', async () => {
   expect(screen.getByText('Charlie Zed')).toBeInTheDocument();
 });
 
-test('role filter restricts to CLUB_MEMBER', async () => {
+test('role filter restricts to MEMBER', async () => {
   render(<AdminMembersPage />);
   await waitFor(() => screen.getByText('Alice Smith'));
-  fireEvent.change(screen.getByTestId('role-filter'), { target: { value: 'CLUB_MEMBER' } });
-  expect(screen.queryByText('Alice Smith')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByTestId('role-filter'), { target: { value: 'MEMBER' } });
+  expect(screen.getByText('Alice Smith')).toBeInTheDocument();
   expect(screen.getByText('Bob Jones')).toBeInTheDocument();
+  expect(screen.queryByText('Admin One')).not.toBeInTheDocument();
 });
 
 test('wallet link points to /admin/ledger?user=<id>', async () => {

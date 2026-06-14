@@ -7,4 +7,6 @@ import java.util.List;
 public interface AdminMessageRepository extends JpaRepository<AdminMessage, Long> {
     List<AdminMessage> findAllByOrderByCreatedAtDesc();
     List<AdminMessage> findByIsResolvedFalseOrderByCreatedAtDesc();
+    List<AdminMessage> findByClubIdAndIsResolvedFalseOrderByCreatedAtDesc(Long clubId);
+    List<AdminMessage> findByClubIdOrderByCreatedAtDesc(Long clubId);
 }

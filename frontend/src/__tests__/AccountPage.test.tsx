@@ -34,7 +34,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const student = { id: 1, fullName: 'S', email: 's@t.com', role: 'STUDENT' as const, isFinishedBasicTraining: false, isOnSchoolTeam: false, lessonsAttended: 3 };
-const admin = { ...student, id: 99, role: 'ADMIN' as const };
+const admin = { ...student, id: 99, role: 'CLUB_ADMIN' as const };
 const owner = { ...student, id: 5 };
 
 const profileUntrained = { id: 5, fullName: 'Target User', email: 'target@t.com', role: 'STUDENT', isFinishedBasicTraining: false, isOnSchoolTeam: false, lessonsAttended: 4, creditBalance: 7, earliestCreditExpiration: null };

@@ -47,7 +47,7 @@ export default function DashboardPage() {
     }
   }
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'CLUB_ADMIN' || user?.role === 'SUPERADMIN' || user?.role === 'TRAINER';
 
   return (
     <ProtectedRoute>
@@ -100,19 +100,23 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="card bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800">
-            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Admin Quick Actions</h3>
-            <div className="flex flex-wrap gap-2">
-              <a href="/admin/planner" className="btn-primary text-sm">Daily Planner</a>
-              <a href="/admin/cancellations" className="btn-secondary text-sm">Cancellations</a>
-              <a href="/admin/analytics" className="btn-secondary text-sm">Analytics</a>
-              <a href="/admin/logs" className="btn-secondary text-sm">System Logs</a>
-              <a href="/admin/ledger" className="btn-secondary text-sm">Manage Ledger</a>
-              <a href="/admin/scheduler" className="btn-secondary text-sm">Auto-Scheduler</a>
+          {isAdmin && (
+            <div className="card bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800">
+              <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Admin Quick Actions</h3>
+              <div className="flex flex-wrap gap-2">
+                <a href="/admin/planner" className="btn-primary text-sm">Daily Planner</a>
+                {user?.featureCancellationRequests !== false && (
+                  <a href="/admin/cancellations" className="btn-secondary text-sm">Cancellations</a>
+                )}
+                <a href="/admin/analytics" className="btn-secondary text-sm">Analytics</a>
+                <a href="/admin/logs" className="btn-secondary text-sm">System Logs</a>
+                <a href="/admin/ledger" className="btn-secondary text-sm">Manage Ledger</a>
+                {user?.featureAutoScheduler !== false && (
+                  <a href="/admin/scheduler" className="btn-secondary text-sm">Auto-Scheduler</a>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upcoming Bookings</h2>
@@ -143,14 +147,16 @@ export default function DashboardPage() {
                         {pending ? 'Cancellation pending admin' : b.status.replace('_', ' ')}
                       </span>
                     </div>
-                    <button
-                      onClick={() => cancelBooking(b.id)}
-                      disabled={pending}
-                      className="text-gray-400 dark:text-gray-500 hover:text-red-500 hover:dark:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors p-1"
-                      title={pending ? 'Already pending admin approval' : 'Request cancellation'}
-                    >
-                      <X size={18} />
-                    </button>
+                    {user?.featureCancellationRequests !== false && (
+                      <button
+                        onClick={() => cancelBooking(b.id)}
+                        disabled={pending}
+                        className="text-gray-400 dark:text-gray-500 hover:text-red-500 hover:dark:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors p-1"
+                        title={pending ? 'Already pending admin approval' : 'Request cancellation'}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 );

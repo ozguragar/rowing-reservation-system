@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { useDialog } from '@/context/DialogContext';
 import { Session, User } from '@/types';
@@ -20,6 +21,8 @@ function maskHHMM(raw: string): string {
 
 export default function PlannerPage() {
   const { toast, confirm } = useDialog();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'SUPERADMIN';
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('day');
@@ -30,10 +33,12 @@ export default function PlannerPage() {
   const [copyTarget, setCopyTarget] = useState('');
   const [selectedSessions, setSelectedSessions] = useState<number[]>([]);
   const [showBoatForm, setShowBoatForm] = useState<number | null>(null);
-  const [boatForm, setBoatForm] = useState({ type: 'COASTAL', capacity: 4, isBasicTrainingBoat: false, name: '' });
+  const [boatForm, setBoatForm] = useState({ type: 'COASTAL', capacity: 4, isBasicTrainingBoat: false, hasCoxSeat: false, name: '' });
 
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  const [addingTo, setAddingTo] = useState<{ boatId: number; sessionId: number } | null>(null);
+  const [addingTo, setAddingTo] = useState<{ boatId: number; sessionId: number; hasCoxSeat: boolean } | null>(null);
+  const hasCoxSeat = addingTo?.hasCoxSeat ?? false;
+  const [addAsCox, setAddAsCox] = useState(false);
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<User[]>([]);
   const [dragOverBoat, setDragOverBoat] = useState<number | null>(null);
@@ -51,7 +56,10 @@ export default function PlannerPage() {
   const loadSessions = useCallback(async () => {
     setLoading(true);
     const start = new Date(currentDate);
-    if (viewMode === 'week') start.setDate(start.getDate() - start.getDay() + 1);
+    if (viewMode === 'week') {
+      const day = start.getDay();
+      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    }
     const end = new Date(start);
     end.setDate(end.getDate() + (viewMode === 'week' ? 6 : 0));
     try {
@@ -102,6 +110,7 @@ export default function PlannerPage() {
       await api.post(`/admin/sessions/${sessionId}/boats`, {
         type: boatForm.type, capacity: boatForm.capacity,
         isBasicTrainingBoat: boatForm.isBasicTrainingBoat,
+        hasCoxSeat: boatForm.hasCoxSeat,
         name: boatForm.name || `${boatForm.type.toLowerCase()}-${boatForm.capacity}x`,
       });
       setShowBoatForm(null);
@@ -190,6 +199,7 @@ export default function PlannerPage() {
     try {
       await api.post('/admin/bookings', {
         userId, boatId: addingTo.boatId, sessionId: addingTo.sessionId,
+        isCoxSeat: addAsCox || undefined,
       });
       setAddingTo(null);
       loadSessions();
@@ -199,10 +209,10 @@ export default function PlannerPage() {
     }
   }
 
-  async function moveUser(userId: number, fromBoatId: number, toBoatId: number) {
+  async function moveUser(userId: number, fromBoatId: number, toBoatId: number, isCoxSeat = false) {
     if (fromBoatId === toBoatId) return;
     try {
-      await api.post('/admin/bookings/move', { userId, fromBoatId, toBoatId });
+      await api.post('/admin/bookings/move', { userId, fromBoatId, toBoatId, isCoxSeat });
       loadSessions();
     } catch (e: any) {
       toast(e.response?.data?.message || 'Failed to move user');
@@ -254,6 +264,9 @@ export default function PlannerPage() {
             </div>
             <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0',
               session.status === 'APPROVED' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300')}>{session.status}</span>
+            {isSuperadmin && session.clubName && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 shrink-0">{session.clubName}</span>
+            )}
             <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 shrink-0">
               <Users size={12} /> {boatCount} · {totalBooked}/{totalCapacity}
             </span>
@@ -269,33 +282,21 @@ export default function PlannerPage() {
 
         {!isCollapsed && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {session.boats?.map(boat => (
-              <div
-                key={boat.id}
-                onDragOver={(e) => { e.preventDefault(); setDragOverBoat(boat.id); }}
-                onDragLeave={() => setDragOverBoat(prev => prev === boat.id ? null : prev)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOverBoat(null);
-                  const d = dragRef.current;
-                  if (d) moveUser(d.userId, d.fromBoatId, boat.id);
-                  dragRef.current = null;
-                }}
-                className={clsx(
-                  'p-3 border rounded-lg transition-colors',
-                  dragOverBoat === boat.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-200 dark:border-gray-700'
-                )}
-              >
+            {session.boats?.map(boat => {
+              const rowingBookings = (boat.bookings || []).filter(bk => !bk.isCoxSeat);
+              const coxBookings = (boat.bookings || []).filter(bk => bk.isCoxSeat);
+              return (
+              <div key={boat.id} className={clsx('p-3 border rounded-lg', dragOverBoat === boat.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-200 dark:border-gray-700')}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-sm truncate">{boat.name}</span>
                   <div className="flex items-center gap-1">
                     <Users size={12} className="text-gray-400 dark:text-gray-500" />
                     <span className="text-xs text-gray-500 dark:text-gray-400">{boat.currentBookings}/{boat.capacity}</span>
                     <button
-                      onClick={() => setAddingTo({ boatId: boat.id, sessionId: session.id })}
+                      onClick={() => { setAddingTo({ boatId: boat.id, sessionId: session.id, hasCoxSeat: boat.hasCoxSeat ?? false }); setAddAsCox(false); }}
                       className="text-gray-400 dark:text-gray-500 hover:text-primary-600 hover:dark:text-primary-400 ml-1"
                       title="Add user"
-                      disabled={boat.currentBookings >= boat.capacity}
+                      disabled={!boat.hasCoxSeat && boat.currentBookings >= boat.capacity}
                     >
                       <UserPlus size={12} />
                     </button>
@@ -305,12 +306,25 @@ export default function PlannerPage() {
                 <div className="flex items-center gap-2 mb-2 text-xs text-gray-500 dark:text-gray-400">
                   <span>{boat.type}</span>
                   {boat.isBasicTrainingBoat && <span className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded">Beginner</span>}
+                  {boat.hasCoxSeat && <span className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded">Cox</span>}
                 </div>
-                <div className="space-y-1 min-h-[24px]">
-                  {boat.bookings?.length === 0 && (
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Rowers</div>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOverBoat(boat.id); }}
+                  onDragLeave={() => setDragOverBoat(prev => prev === boat.id ? null : prev)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverBoat(null);
+                    const d = dragRef.current;
+                    if (d) moveUser(d.userId, d.fromBoatId, boat.id, false);
+                    dragRef.current = null;
+                  }}
+                  className="space-y-1 min-h-[24px] rounded p-1 -mx-1 transition-colors"
+                >
+                  {rowingBookings.length === 0 && (
                     <div className="text-xs text-gray-300 dark:text-gray-600 italic px-2 py-1">Drop here</div>
                   )}
-                  {boat.bookings?.map(bk => (
+                  {rowingBookings.map(bk => (
                     <div
                       key={bk.id}
                       draggable
@@ -319,8 +333,8 @@ export default function PlannerPage() {
                       className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 px-2 py-1 rounded text-xs cursor-grab active:cursor-grabbing"
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={bk.userRole === 'STUDENT' ? 'badge-student' : 'badge-member'}>
-                          {bk.userRole === 'STUDENT' ? 'S' : bk.userRole === 'CLUB_MEMBER' ? 'M' : 'A'}
+                        <span className={bk.userRole === 'MEMBER' ? 'badge-member' : bk.userRole === 'TRAINER' ? 'badge-student' : 'badge-member'}>
+                          {bk.userRole === 'MEMBER' ? 'M' : bk.userRole === 'TRAINER' ? 'T' : 'A'}
                         </span>
                         <span className="text-gray-700 dark:text-gray-300 truncate">{bk.userFullName}</span>
                       </div>
@@ -330,8 +344,50 @@ export default function PlannerPage() {
                     </div>
                   ))}
                 </div>
+                {boat.hasCoxSeat && (
+                  <>
+                    <div className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-2 mb-1">Cox Seat</div>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragOverBoat(boat.id); }}
+                      onDragLeave={() => setDragOverBoat(prev => prev === boat.id ? null : prev)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOverBoat(null);
+                        const d = dragRef.current;
+                        if (d) moveUser(d.userId, d.fromBoatId, boat.id, true);
+                        dragRef.current = null;
+                      }}
+                      className="space-y-1 min-h-[24px] rounded p-1 -mx-1 transition-colors"
+                    >
+                      {coxBookings.length === 0 && (
+                        <div className="text-xs text-gray-300 dark:text-gray-600 italic px-2 py-1">Drop here</div>
+                      )}
+                      {coxBookings.map(bk => (
+                        <div
+                          key={bk.id}
+                          draggable
+                          onDragStart={() => { dragRef.current = { userId: bk.userId, fromBoatId: boat.id }; }}
+                          onDragEnd={() => { dragRef.current = null; setDragOverBoat(null); }}
+                          className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 hover:dark:bg-blue-900/40 px-2 py-1 rounded text-xs cursor-grab active:cursor-grabbing border border-blue-200 dark:border-blue-800"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={bk.userRole === 'MEMBER' ? 'badge-member' : bk.userRole === 'TRAINER' ? 'badge-student' : 'badge-member'}>
+                              {bk.userRole === 'MEMBER' ? 'M' : bk.userRole === 'TRAINER' ? 'T' : 'A'}
+                            </span>
+                            <span className="text-gray-700 dark:text-gray-300 truncate">{bk.userFullName}</span>
+                            <span className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">(cox)</span>
+                          </div>
+                          <button onClick={() => removeBooking(bk.id)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 hover:dark:text-red-400 shrink-0" title="Remove">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -352,6 +408,10 @@ export default function PlannerPage() {
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={boatForm.isBasicTrainingBoat} onChange={e => setBoatForm(p => ({ ...p, isBasicTrainingBoat: e.target.checked }))} className="w-4 h-4 rounded" />
                 Basic Training
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={boatForm.hasCoxSeat} onChange={e => setBoatForm(p => ({ ...p, hasCoxSeat: e.target.checked }))} className="w-4 h-4 rounded" />
+                Cox Seat
               </label>
             </div>
             <div className="flex gap-2 mt-3">
@@ -536,6 +596,12 @@ export default function PlannerPage() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setAddingTo(null)}>
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-semibold mb-3">Add User to Boat</h3>
+              {hasCoxSeat && (
+                <label className="flex items-center gap-2 text-sm mb-3">
+                  <input type="checkbox" checked={addAsCox} onChange={e => setAddAsCox(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span>Book as <strong>Cox Seat</strong></span>
+                </label>
+              )}
               <input
                 autoFocus
                 value={userQuery}
@@ -552,7 +618,7 @@ export default function PlannerPage() {
                   return (
                     <button
                       key={u.id}
-                      disabled={noCredit || u.role === 'ADMIN'}
+                      disabled={noCredit || u.role === 'CLUB_ADMIN' || u.role === 'SUPERADMIN'}
                       onClick={() => adminAddUser(u.id)}
                       className="w-full flex items-center justify-between py-2 px-1 hover:bg-gray-50 hover:dark:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-left"
                     >

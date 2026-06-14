@@ -194,9 +194,10 @@ Runs once at startup if `userRepository.count() == 0`. Idempotent otherwise (ear
 ### Entities
 
 | Table | Primary key | Notable fields | Relationships | Constraints |
-|---|---|---|---|---|
-| `users` | `id BIGINT` | `email (unique)`, `password_hash`, `role (ADMIN/STUDENT/CLUB_MEMBER)`, `is_finished_basic_training`, `is_on_school_team`, `lessons_attended`, `refresh_token` | — | `email` UNIQUE, `role` NOT NULL |
-| `rowing_sessions` | `id BIGINT` | `date`, `start_time`, `end_time`, `status (DRAFT/APPROVED)` | — | — |
+|---|---|---|---|---|---|
+| `clubs` | `id BIGINT` | `name`, `created_at`, `feature_availability_module`, `feature_cancellation_requests`, `feature_auto_scheduler`, `feature_show_booked_members` | — | — |
+| `users` | `id BIGINT` | `email (unique)`, `password_hash`, `role (SUPERADMIN/CLUB_ADMIN/TRAINER/MEMBER)`, `member_type (STUDENT/RECREATIONAL)`, `is_finished_basic_training`, `is_on_school_team`, `is_cox`, `lessons_attended`, `refresh_token` | `@ManyToOne club` | `email` UNIQUE, `role` NOT NULL |
+| `rowing_sessions` | `id BIGINT` | `date`, `start_time`, `end_time`, `status (DRAFT/APPROVED)` | `@ManyToOne club` (nullable=false) | `club_id` NOT NULL |
 | `boats` | `id BIGINT` | `type (COASTAL/OLYMPIC)`, `capacity`, `is_basic_training_boat`, `current_bookings`, `name`, `version (Long, @Version)` | `@ManyToOne session` | Optimistic lock via `@Version` — prevents double-booking race |
 | `bookings` | `id BIGINT` | `status (AUTO_ASSIGNED/MANUAL/CANCELLATION_REQUESTED/CANCELED)`, `created_at` | `@ManyToOne user`, `boat`, `session` | `(user_id, session_id)` UNIQUE; `bookings_status_check` CHECK constraint over the 4 enum values |
 | `financial_ledger` | `id BIGINT` | `amount DECIMAL`, `reason`, `running_balance DECIMAL`, `timestamp`, `expiration_date` (nullable) | `@ManyToOne user` | Rows are immutable after creation (except `expiration_date` via admin endpoint) |
@@ -208,7 +209,8 @@ Runs once at startup if `userRepository.count() == 0`. Idempotent otherwise (ear
 
 ### Enums
 
-- `Role` — `ADMIN`, `STUDENT`, `CLUB_MEMBER`
+- `Role` — `SUPERADMIN`, `CLUB_ADMIN`, `TRAINER`, `MEMBER`
+- `MemberType` — `STUDENT`, `RECREATIONAL`, `DEFAULT`
 - `BookingStatus` — `AUTO_ASSIGNED`, `MANUAL`, `CANCELLATION_REQUESTED`, `CANCELED`
 - `BoatType` — `COASTAL`, `OLYMPIC`
 - `SessionStatus` — `DRAFT`, `APPROVED`
@@ -229,9 +231,10 @@ Runs once at startup if `userRepository.count() == 0`. Idempotent otherwise (ear
 
 ```java
 .authorizeHttpRequests(auth -> auth
-    .requestMatchers("/api/auth/**").permitAll()      // register, login, refresh
-    .requestMatchers("/api/admin/**").hasRole("ADMIN") // all admin endpoints
-    .anyRequest().authenticated()                     // everything else
+    .requestMatchers("/api/auth/**").permitAll()       // register, login, refresh
+    .requestMatchers("/api/admin/**").hasAnyAuthority("CLUB_ADMIN", "SUPERADMIN", "TRAINER") // admin endpoints
+    .requestMatchers("/api/superadmin/**").hasAuthority("SUPERADMIN") // superadmin-only endpoints
+    .anyRequest().authenticated()                      // everything else
 )
 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -242,10 +245,15 @@ Public endpoints:
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
 
-Admin-only endpoints:
+Admin-only endpoints (CLUB_ADMIN / SUPERADMIN / TRAINER):
 - All of `/api/admin/**` (see §5 for the list)
 
+Superadmin-only endpoints:
+- All of `/api/superadmin/**` (club CRUD, feature toggles, impersonation)
+
 Everything else is authenticated.
+
+Method-level `@PreAuthorize` fine-tunes access within AdminController — TRAINER can manage sessions/bookings/cancellations but NOT user management, ledger, or settings (those require CLUB_ADMIN or SUPERADMIN).
 
 ### JWT
 
@@ -253,7 +261,7 @@ Everything else is authenticated.
 - **Secret**: 32+ byte base64-encoded string from `JWT_SECRET` env var; defaults to a placeholder in `application.yml`
 - **Access token**: 15-minute lifetime (`app.jwt.access-token-expiration=900000` ms)
   - Subject: user email
-  - Claims: `role` (ADMIN/STUDENT/CLUB_MEMBER)
+  - Claims: `role` (SUPERADMIN/CLUB_ADMIN/TRAINER/MEMBER)
 - **Refresh token**: 7-day lifetime (`app.jwt.refresh-token-expiration=604800000` ms)
   - Stored on `users.refresh_token` column
   - Rotated on each `/auth/refresh` call — both tokens are reissued
@@ -263,7 +271,7 @@ Everything else is authenticated.
 1. Extract `Authorization: Bearer <token>` header. If absent, `doFilterChain.doFilter()` continues (Spring Security then applies the configured rule for the path).
 2. Parse the token with `JwtService.isTokenValid()`. If malformed/expired/tampered, skip authentication — the request continues without a security context, and protected endpoints return 401/403.
 3. If valid, extract `email` (subject) and `role` claim.
-4. Build a `UsernamePasswordAuthenticationToken` with authority `ROLE_{role}` and set it on `SecurityContextHolder`.
+4. Build a `UsernamePasswordAuthenticationToken` with the bare role string as the authority (e.g., `SUPERADMIN`, `CLUB_ADMIN`) and set it on `SecurityContextHolder`.
 5. Continue the filter chain.
 
 ### Password hashing
@@ -297,7 +305,7 @@ All paths prefixed `/api`. Body schemas reference DTOs in `src/main/java/com/row
 | Method | Path | Body | Returns | Description |
 |---|---|---|---|---|
 | `GET` | `/me` | — | `UserDto` | Returns current user (with `creditBalance`, `earliestCreditExpiration` populated). |
-| `GET` | `/{id}` | — | `UserDto` | Returns any user by id. Owner/admin guard enforced in the frontend; backend currently allows any authenticated user to look anyone up by id. |
+| `GET` | `/{id}` | — | `UserDto` | Returns any user by id. Backend gated to self or admin (SUPERADMIN/CLUB_ADMIN/TRAINER). |
 | `POST` | `/me/password` | `ChangePasswordRequest { currentPassword, newPassword }` | `{ message }` | Changes own password after verifying current. `newPassword` `@Size(min=6)`. |
 
 ### 5.3 `BookingController` — `/api/bookings` (authenticated)
@@ -415,7 +423,20 @@ Grouped by functional area.
 |---|---|---|---|
 | `POST` | `/scheduler/run?weekStart=YYYY-MM-DD` | — | `Map<String,Object>` (`totalAssigned`, `assignments[]`) |
 
-### 5.8 `SettingsController` — `/api/settings`
+All admin endpoints are club-scoped: the authenticated user's club_id is extracted and used to filter queries (`findByClubIdAnd*`). SUPERADMIN users bypass club scoping (null clubId = no filter).
+
+### 5.8 `SuperadminController` — `/api/superadmin` (SUPERADMIN only)
+
+| Method | Path | Body | Returns | Description |
+|---|---|---|---|---|
+| `POST` | `/login` | `{ email, password }` | `AuthResponse` | Superadmin login (separate endpoint to apply SUPERADMIN scope) |
+| `GET` | `/clubs` | — | `List<ClubDto>` | List all clubs with feature toggle states |
+| `POST` | `/clubs` | `CreateClubRequest { name }` | `ClubDto` | Create a new club |
+| `PUT` | `/clubs/{id}/features` | `Map<String,Boolean>` | `ClubDto` | Toggle any of the 4 feature flags |
+| `POST` | `/clubs/{id}/impersonate` | — | `AuthResponse` | Returns JWT for a CLUB_ADMIN of that club (superadmin can act as club admin) |
+| `POST` | `/change-password` | `{ currentPassword, newPassword }` | `{ message }` | Change superadmin's own password |
+
+### 5.9 `SettingsController` — `/api/settings`
 
 | Method | Path | Auth | Returns | Description |
 |---|---|---|---|---|
@@ -430,6 +451,7 @@ Grouped by functional area.
 The heaviest service — encodes every booking-time rule.
 
 - **`bookSeat(userEmail, request)`**: session must be `APPROVED`; user can't already have a non-canceled booking in the session; boat must have capacity; basic-training gate (if user hasn't finished training and boat is `isBasicTrainingBoat=false`, reject); `enforceTimeRestrictions()`; `enforceNextDayOnly()`; credit check (balance ≥ 1). On success: increment `boat.currentBookings`, create booking with status `MANUAL`, deduct 1 credit.
+- **Cox seat booking**: If `request.isCoxSeat` is true and boat has `hasCoxSeat=true`, checks that caller is cox (or TRAINER) and that cox seat isn't already taken. No credit deduction for cox seat bookings. Cox bookings also don't count toward `currentBookings` (they use a separate `coxBookings` counter on Boat).
 - **`cancelBooking(userEmail, bookingId)`**: checks `allow_cancellations` setting; rejects if already canceled/requested; **does not** refund or decrement — only sets status to `CANCELLATION_REQUESTED`. Seat is still held.
 - **`approveCancellation(bookingId)`** (admin only): requires status `CANCELLATION_REQUESTED`. Sets to `CANCELED`, decrements boat, refunds 1 credit with reason "Refund: Cancellation approved for <date>".
 - **`denyCancellation(bookingId)`**: reverts to `MANUAL` (no refund, seat keeps held).
@@ -481,8 +503,8 @@ Ledger rows are **immutable after creation** except for `expiration_date`. Every
 - **`createSession(request)`**: saves with status `DRAFT`.
 - **`approveSession(id)`**: flips to `APPROVED`.
 - **`addBoatToSession(id, request)`**: validates capacity by type — COASTAL: 1/2/4, OLYMPIC: 1/2/4/8. Defaults name to `{type}-{capacity}x` if not provided.
-- **`copyDaySessions(sourceDate, targetDate)`**: clones every session on `sourceDate` (and their boats) to `targetDate` with `currentBookings=0` and status `DRAFT`.
-- **`copyWeekSessions(sourceWeekStart, targetWeekStart)`**: calls `copyDaySessions` for each of the 7 offsets.
+- **`copyDaySessions(sourceDate, targetDate, club)`**: clones every session on `sourceDate` (and their boats) to `targetDate` with `currentBookings=0`, `hasCoxSeat` preserved, and status `DRAFT`. Club-scoped — only copies sessions belonging to the given club (or all if club is null for SUPERADMIN).
+- **`copyWeekSessions(sourceWeekStart, targetWeekStart, club)`**: calls `copyDaySessions` for each of the 7 offsets, club-scoped.
 - **`deleteSession(id)`**: rejects if any boat has `currentBookings > 0`, else deletes boats and session.
 - **`bulkDeleteSessions(ids)`**: same per-session logic in a loop.
 
@@ -494,17 +516,19 @@ Ledger rows are **immutable after creation** except for `expiration_date`. Every
 
 ### `AnalyticsService`
 
-- **`getOccupancyLast7Days()`**: for each session in `[today-7, today]`, computes `totalCapacity` (sum of boat capacities), `totalBooked` (sum of `boat.currentBookings`), `occupancyPercentage` rounded to 2 decimals.
+- **`getOccupancyLast7Days(clubId)`**: for each session in `[today-7, today]` (club-scoped if clubId not null), computes `totalCapacity` (sum of boat capacities), `totalBooked` (sum of `boat.currentBookings`), `occupancyPercentage` rounded to 2 decimals.
 
 ### `AutoSchedulerService`
 
-- **`runScheduler(weekStart)`**: for each session in the week, considers only 4-person coastal boats (ignores 1x, 2x, and OLYMPIC entirely). Pools eligible users: those with availability AND credit ≥ 1 AND basic training complete (or boat is basic-training-only) AND not already booked in that session. Groups by role (never mixes STUDENT + CLUB_MEMBER in the same boat). Assigns up to `capacity` per boat. For each assigned user: creates `AUTO_ASSIGNED` booking + deducts 1 credit + publishes a `SessionAssignmentEvent` (consumed by notification listener).
+- **`runScheduler(weekStart)`**: for each session in the week, considers only 4-person coastal boats (ignores 1x, 2x, and OLYMPIC entirely). Pools eligible users: those with availability AND credit ≥ 1 AND basic training complete (or boat is basic-training-only) AND not already booked in that session. Groups by role (never mixes STUDENT + CLUB_MEMBER in the same boat). Assigns up to `capacity` per boat. For each assigned user: creates `AUTO_ASSIGNED` booking + deducts 1 credit + publishes a `SessionAssignmentEvent` (consumed by notification listener). Skips sessions whose club has `featureAutoScheduler=false`.
 
 ### `UserService`
 
 - **`changePassword(email, current, new)`**: BCrypt-verifies current, encodes new.
 - **`setBasicTrainingFinished(userId, finished)`**: flips the flag; returns enriched DTO.
-- **enrichment helper**: every user-returning method populates `creditBalance` and `earliestCreditExpiration` from `FinancialLedger`.
+- **`getAllUsers(clubId)`**: returns users filtered by club (null = all).
+- **`searchUsers(clubId, query)`**: club-scoped name/email search.
+- **enrichment helper**: every user-returning method populates `creditBalance`, `earliestCreditExpiration`, and club feature flags from `Club` entity.
 
 ### `AuthService`
 
@@ -586,6 +610,7 @@ Every successful mutating HTTP call writes an `AuditLog` row with the authentica
 | `/admin/members` | `app/admin/members/page.tsx` | ADMIN | Card grid with search, role filter, sort by name/lessons/credits/expiration/training; wallet icon → `/admin/ledger?user=<id>` |
 | `/admin/messages` | `app/admin/messages/page.tsx` | ADMIN | Resolve member-reported ledger issues |
 | `/admin/settings` | `app/admin/settings/page.tsx` | ADMIN | Hour select + toggle switches for every public flag |
+| `/superadmin` | `app/superadmin/page.tsx` | SUPERADMIN | Club dashboard with feature toggle switches, impersonation entry point |
 
 ### Context layering
 
@@ -625,14 +650,15 @@ Single axios instance:
 
 ### Type system — `src/types/index.ts`
 
-- **`User`** — `{ id, fullName, email, role: 'ADMIN'|'STUDENT'|'CLUB_MEMBER', isFinishedBasicTraining, isOnSchoolTeam, lessonsAttended, creditBalance? }`
+- **`User`** — `{ id, fullName, email, role: 'SUPERADMIN'|'CLUB_ADMIN'|'TRAINER'|'MEMBER', memberType: 'STUDENT'|'RECREATIONAL'|'DEFAULT', isFinishedBasicTraining, isOnSchoolTeam, isCox, lessonsAttended, creditBalance?, clubName?, featureAvailabilityModule?, featureCancellationRequests?, featureAutoScheduler?, featureShowBookedMembers? }`
 - **`AuthResponse`** — `{ accessToken, refreshToken, user }`
 - **`Session`** — `{ id, date, startTime, endTime, status: 'DRAFT'|'APPROVED', boats? }`
-- **`Boat`** — `{ id, sessionId, type: 'COASTAL'|'OLYMPIC', capacity, isBasicTrainingBoat, currentBookings, version, name, bookings? }`
-- **`Booking`** — `{ id, userId, userFullName, userEmail, userRole, boatId, boatName, sessionId, status: 'AUTO_ASSIGNED'|'MANUAL'|'CANCELLATION_REQUESTED'|'CANCELED', createdAt }`
+- **`Boat`** — `{ id, sessionId, type: 'COASTAL'|'OLYMPIC', capacity, isBasicTrainingBoat, hasCoxSeat, currentBookings, version, name, bookings? }`
+- **`Booking`** — `{ id, userId, userFullName, userEmail, userRole, boatId, boatName, sessionId, status: 'AUTO_ASSIGNED'|'MANUAL'|'CANCELLATION_REQUESTED'|'CANCELED', createdAt, isCoxSeat }`
 - **`LedgerEntry`** — `{ id, userId, userFullName, amount, reason, runningBalance, timestamp, expirationDate }`
 - **`AuditLog`** — `{ id, userEmail, action, endpoint, timestamp, details }`
 - **`Analytics`** — `{ sessionId, date, sessionTime, totalCapacity, totalBooked, occupancyPercentage }`
+- **`Club`** — `{ id, name, createdAt, featureAvailabilityModule, featureCancellationRequests, featureAutoScheduler, featureShowBookedMembers }`
 
 ### Utilities — `src/lib/dateUtils.ts`
 
@@ -833,7 +859,7 @@ The frontend's `SettingsProvider` auto-refetches these on every auth-state chang
 
 ## 11. Testing
 
-### Backend — 115 tests across 18 classes
+### Backend — 195 tests across 26 classes
 
 Run: `mvn test` (runs JaCoCo with ≥70% line coverage threshold; build fails if below).
 
@@ -899,10 +925,12 @@ Run: `npm test` for plain run, `npm run test:coverage` with thresholds (branches
 - **Hardcoded secrets in `docker-compose.yml`** — the JWT secret and DB password are in-line. For production, use Docker secrets or a secret manager.
 - **No HTTPS termination** — both the backend and frontend speak HTTP. A reverse proxy (nginx, Caddy, Traefik) is required for public exposure.
 - **No rate limiting** — `POST /api/auth/login` has no throttling. Production should front it with a reverse proxy rate limit or a Spring Security-based solution.
-- **Not multi-tenant** — single club; no organization/tenant column anywhere.
+- **Multi-tenant** — refactored from single-club to multi-tenant. Each `User`, `RowingSession`, `FinancialLedger`, `AdminMessage`, and `NotificationLog` has a `club_id` FK. SUPERADMIN users (no club) can impersonate clubs and manage all tenants. Club-scoped queries are enforced in repositories (`findByClubIdAnd*`).
+- **Cox seat** — `Boat.hasCoxSeat` and `User.isCox` fields added. Cox-specific booking logic: cox users can book cox seats on eligible boats; regular users cannot occupy a cox seat even if it's the last available spot. TRAINER can also book cox seats.
+- **Club-level feature toggles** — Four boolean flags on the `Club` entity replace the global `app_settings` equivalents. These are served in the `UserDto` so the frontend can gate UI without extra API calls. Flags: `featureAvailabilityModule`, `featureCancellationRequests`, `featureAutoScheduler`, `featureShowBookedMembers`.
 - **`DataSeeder` runs only on empty DB** — not idempotent. Restarts with data don't re-seed. Use `docker compose down -v` to reset.
-- **Admin `GET /api/users/{id}` is not access-gated on the backend** — any authenticated user can look up any other user's profile (with credit balance). The `/account/[id]` page guards this in the UI, but an enterprising API client can bypass.
 - **No soft-delete anywhere** — `deleteSession` is allowed only if no bookings exist; there's no archival for historical sessions.
+- **No email notifications** — `NotificationLog` entity exists and `AutoSchedulerService` publishes events, but nothing sends actual emails.
 - **No i18n** — all UI copy is English.
 - **No notifications in UI** — `NotificationLog` entity exists and `AutoSchedulerService` publishes events, but nothing on the frontend surfaces them.
 - **Analytics is 7-day only** — no date-range picker, no export.

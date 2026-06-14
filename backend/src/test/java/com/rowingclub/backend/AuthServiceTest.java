@@ -27,14 +27,14 @@ class AuthServiceTest {
         req.setFullName("Test User");
         req.setEmail("newuser@test.com");
         req.setPassword("password123");
-        req.setRole("STUDENT");
+        req.setRole("MEMBER");
 
         AuthResponse response = authService.register(req);
 
         assertNotNull(response.getAccessToken());
         assertNotNull(response.getRefreshToken());
         assertEquals("newuser@test.com", response.getUser().getEmail());
-        assertEquals("STUDENT", response.getUser().getRole());
+        assertEquals("MEMBER", response.getUser().getRole());
     }
 
     @Test
@@ -121,6 +121,6 @@ class AuthServiceTest {
         req.setPassword("pass123");
         // role intentionally null
         AuthResponse response = authService.register(req);
-        assertEquals("STUDENT", response.getUser().getRole());
+        assertEquals("MEMBER", response.getUser().getRole());
     }
 }

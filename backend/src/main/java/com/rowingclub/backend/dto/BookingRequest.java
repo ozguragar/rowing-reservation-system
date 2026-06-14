@@ -9,4 +9,5 @@ public class BookingRequest {
     private Long boatId;
     @NotNull
     private Long sessionId;
+    private Boolean isCoxSeat;
 }

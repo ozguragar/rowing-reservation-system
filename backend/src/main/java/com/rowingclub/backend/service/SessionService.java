@@ -2,14 +2,18 @@ package com.rowingclub.backend.service;
 
 import com.rowingclub.backend.dto.*;
 import com.rowingclub.backend.entity.Boat;
+import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.entity.RowingSession;
+import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.enums.BoatType;
+import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.enums.SessionStatus;
 import com.rowingclub.backend.exception.BusinessException;
 import com.rowingclub.backend.exception.ResourceNotFoundException;
 import com.rowingclub.backend.repository.BoatRepository;
 import com.rowingclub.backend.repository.BookingRepository;
 import com.rowingclub.backend.repository.RowingSessionRepository;
+import com.rowingclub.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,10 +29,30 @@ public class SessionService {
     private final RowingSessionRepository sessionRepository;
     private final BoatRepository boatRepository;
     private final BookingRepository bookingRepository;
+    private final UserRepository userRepository;
+
+    public Long getClubIdForUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getRole() == Role.SUPERADMIN) return null;
+        return user.getClub() != null ? user.getClub().getId() : null;
+    }
+
+    public Club getClubForUser(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return user.getClub();
+    }
 
     @Transactional
     public SessionDto createSession(CreateSessionRequest request) {
+        return createSession(request, null);
+    }
+
+    @Transactional
+    public SessionDto createSession(CreateSessionRequest request, Club club) {
         RowingSession session = RowingSession.builder()
+                .club(club)
                 .date(request.getDate())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
@@ -38,8 +62,8 @@ public class SessionService {
     }
 
     @Transactional
-    public List<SessionDto> createBulkSessions(List<CreateSessionRequest> requests) {
-        return requests.stream().map(this::createSession).toList();
+    public List<SessionDto> createBulkSessions(List<CreateSessionRequest> requests, Club club) {
+        return requests.stream().map(r -> createSession(r, club)).toList();
     }
 
     @Transactional
@@ -55,6 +79,7 @@ public class SessionService {
                 .type(type)
                 .capacity(request.getCapacity())
                 .isBasicTrainingBoat(request.getIsBasicTrainingBoat() != null && request.getIsBasicTrainingBoat())
+                .hasCoxSeat(request.getHasCoxSeat() != null && request.getHasCoxSeat())
                 .currentBookings(0)
                 .name(request.getName() != null ? request.getName() :
                         type.name().toLowerCase() + "-" + request.getCapacity() + "x")
@@ -115,6 +140,12 @@ public class SessionService {
                 .stream().map(s -> getSessionWithBoats(s.getId())).toList();
     }
 
+    public List<SessionDto> getApprovedUpcomingSessions(Long clubId) {
+        if (clubId == null) return getApprovedUpcomingSessions();
+        return sessionRepository.findByClubIdAndDateGreaterThanEqualAndStatus(clubId, LocalDate.now(), SessionStatus.APPROVED)
+                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+    }
+
     public List<SessionDto> getSessionsByDateRange(LocalDate start, LocalDate end) {
         return sessionRepository.findByDateBetween(start, end)
                 .stream().map(s -> getSessionWithBoats(s.getId())).toList();
@@ -125,23 +156,32 @@ public class SessionService {
                 .stream().map(s -> getSessionWithBoats(s.getId())).toList();
     }
 
+    public List<SessionDto> getAllSessionsByDateRange(Long clubId, LocalDate start, LocalDate end) {
+        if (clubId == null) return getAllSessionsByDateRange(start, end);
+        return sessionRepository.findByClubIdAndDateBetween(clubId, start, end)
+                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+    }
+
     @Transactional
-    public List<SessionDto> copyWeekSessions(LocalDate sourceWeekStart, LocalDate targetWeekStart) {
+    public List<SessionDto> copyWeekSessions(LocalDate sourceWeekStart, LocalDate targetWeekStart, Club club) {
         List<SessionDto> created = new ArrayList<>();
         for (int offset = 0; offset < 7; offset++) {
             LocalDate src = sourceWeekStart.plusDays(offset);
             LocalDate tgt = targetWeekStart.plusDays(offset);
-            created.addAll(copyDaySessions(src, tgt));
+            created.addAll(copyDaySessions(src, tgt, club));
         }
         return created;
     }
 
     @Transactional
-    public List<SessionDto> copyDaySessions(LocalDate sourceDate, LocalDate targetDate) {
-        List<RowingSession> sourceSessions = sessionRepository.findByDate(sourceDate);
+    public List<SessionDto> copyDaySessions(LocalDate sourceDate, LocalDate targetDate, Club club) {
+        List<RowingSession> sourceSessions = club != null
+                ? sessionRepository.findByClubIdAndDate(club.getId(), sourceDate)
+                : sessionRepository.findByDate(sourceDate);
         List<SessionDto> created = new ArrayList<>();
         for (RowingSession source : sourceSessions) {
             RowingSession newSession = RowingSession.builder()
+                    .club(source.getClub())
                     .date(targetDate)
                     .startTime(source.getStartTime())
                     .endTime(source.getEndTime())
@@ -156,6 +196,7 @@ public class SessionService {
                         .type(sourceBoat.getType())
                         .capacity(sourceBoat.getCapacity())
                         .isBasicTrainingBoat(sourceBoat.getIsBasicTrainingBoat())
+                        .hasCoxSeat(sourceBoat.getHasCoxSeat())
                         .currentBookings(0)
                         .name(sourceBoat.getName())
                         .build();

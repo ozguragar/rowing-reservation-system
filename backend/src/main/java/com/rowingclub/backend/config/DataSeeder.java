@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-@Profile("!prod")   // Seed only outside the prod profile
+@Profile("!prod")
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
@@ -27,6 +27,7 @@ public class DataSeeder implements CommandLineRunner {
     private final BoatRepository boatRepository;
     private final FinancialLedgerRepository ledgerRepository;
     private final AppSettingRepository appSettingRepository;
+    private final ClubRepository clubRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -39,12 +40,18 @@ public class DataSeeder implements CommandLineRunner {
 
         log.info("Seeding database...");
         seedSettings();
-        List<User> allUsers = new ArrayList<>();
-        allUsers.addAll(seedAdmins());
-        allUsers.addAll(seedStudents());
-        allUsers.addAll(seedClubMembers());
-        seedSessions();
-        seedCredits(allUsers);
+        seedSuperadmin();
+        List<Club> clubs = seedClubs();
+        
+        for (Club club : clubs) {
+            List<User> clubUsers = new ArrayList<>();
+            clubUsers.addAll(seedClubAdmins(club));
+            clubUsers.addAll(seedTrainers(club));
+            clubUsers.addAll(seedMembers(club));
+            seedSessions(club);
+            seedCredits(clubUsers, club);
+        }
+        
         log.info("Database seeding completed!");
     }
 
@@ -57,95 +64,157 @@ public class DataSeeder implements CommandLineRunner {
                 .settingKey("student_booking_hour").settingValue("16").build());
     }
 
-    private List<User> seedAdmins() {
+    private void seedSuperadmin() {
+        User superadmin = userRepository.save(User.builder()
+                .fullName("Super Admin")
+                .email("superadmin@rowingclub.com")
+                .passwordHash(passwordEncoder.encode("superadmin123"))
+                .role(Role.SUPERADMIN)
+                .isFinishedBasicTraining(true)
+                .isOnSchoolTeam(false)
+                .lessonsAttended(0)
+                .isCox(false)
+                .build());
+        log.info("Created superadmin: {}", superadmin.getEmail());
+    }
+
+    private List<Club> seedClubs() {
+        List<Club> clubs = new ArrayList<>();
+        clubs.add(clubRepository.save(Club.builder()
+                .name("Riverside Rowing Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build()));
+        clubs.add(clubRepository.save(Club.builder()
+                .name("University Rowing Team")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build()));
+        clubs.add(clubRepository.save(Club.builder()
+                .name("Metropolitan Rowing Association")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build()));
+        log.info("Created 3 clubs");
+        return clubs;
+    }
+
+    private List<User> seedClubAdmins(Club club) {
         List<User> admins = new ArrayList<>();
-        admins.add(createUser("Admin One", "admin1@rowingclub.com", "admin123", Role.ADMIN, true, false));
-        admins.add(createUser("Admin Two", "admin2@rowingclub.com", "admin123", Role.ADMIN, true, false));
-        log.info("Created 2 admins");
+        admins.add(createUser(
+                club, 
+                "Admin " + club.getName(), 
+                "admin@" + club.getName().toLowerCase().replace(" ", "") + ".com",
+                "admin123", 
+                Role.CLUB_ADMIN, 
+                MemberType.DEFAULT,
+                true, 
+                false, 
+                false
+        ));
+        log.info("Created 1 club admin for {}", club.getName());
         return admins;
     }
 
-    private List<User> seedStudents() {
-        List<User> students = new ArrayList<>();
-        for (int i = 1; i <= 50; i++) {
-            boolean basicTraining = i <= 45; // 90% finished basic training
-            boolean onTeam = i <= 10;
-            students.add(createUser(
-                    "Student " + String.format("%02d", i),
-                    "student" + i + "@university.edu",
-                    "student123",
-                    Role.STUDENT,
-                    basicTraining,
-                    onTeam
+    private List<User> seedTrainers(Club club) {
+        List<User> trainers = new ArrayList<>();
+        for (int i = 1; i <= 2; i++) {
+            trainers.add(createUser(
+                    club,
+                    "Trainer " + i + " " + club.getName(),
+                    "trainer" + i + "@" + club.getName().toLowerCase().replace(" ", "") + ".com",
+                    "trainer123",
+                    Role.TRAINER,
+                    MemberType.DEFAULT,
+                    true,
+                    false,
+                    true
             ));
         }
-        log.info("Created 50 students (45 trained, 5 untrained)");
-        return students;
+        log.info("Created 2 trainers for {}", club.getName());
+        return trainers;
     }
 
-    private List<User> seedClubMembers() {
+    private List<User> seedMembers(Club club) {
         List<User> members = new ArrayList<>();
-        for (int i = 1; i <= 40; i++) {
-            boolean basicTraining = i <= 36; // 90% finished basic training
+        MemberType[] types = {MemberType.STUDENT, MemberType.RECREATIONAL, MemberType.DEFAULT};
+        
+        for (int i = 1; i <= 30; i++) {
+            boolean basicTraining = i <= 27;
+            boolean onTeam = i <= 5;
+            boolean isCox = i <= 3;
+            MemberType memberType = types[i % 3];
+            
             members.add(createUser(
-                    "Member " + String.format("%02d", i),
-                    "member" + i + "@rowingclub.com",
+                    club,
+                    "Member " + String.format("%02d", i) + " " + club.getName(),
+                    "member" + i + "@" + club.getName().toLowerCase().replace(" ", "") + ".com",
                     "member123",
-                    Role.CLUB_MEMBER,
+                    Role.MEMBER,
+                    memberType,
                     basicTraining,
-                    false
+                    onTeam,
+                    isCox
             ));
         }
-        log.info("Created 40 club members (36 trained, 4 untrained)");
+        log.info("Created 30 members for {} (27 trained, 3 untrained, mixed types)", club.getName());
         return members;
     }
 
-    private User createUser(String name, String email, String password, Role role,
-                           boolean basicTraining, boolean onTeam) {
+    private User createUser(Club club, String name, String email, String password, Role role,
+                           MemberType memberType, boolean basicTraining, boolean onTeam, boolean isCox) {
         return userRepository.save(User.builder()
+                .club(club)
                 .fullName(name)
                 .email(email)
                 .passwordHash(passwordEncoder.encode(password))
                 .role(role)
+                .memberType(memberType)
                 .isFinishedBasicTraining(basicTraining)
                 .isOnSchoolTeam(onTeam)
                 .lessonsAttended((int) (Math.random() * 30))
+                .isCox(isCox)
                 .build());
     }
 
-    private void seedSessions() {
+    private void seedSessions(Club club) {
         LocalDate today = LocalDate.now();
 
         for (int dayOffset = 0; dayOffset < 14; dayOffset++) {
             LocalDate date = today.plusDays(dayOffset);
             if (date.getDayOfWeek() == DayOfWeek.MONDAY) continue;
 
-            // Morning sessions: 6:20, 7:20, 8:20, 9:20
             LocalTime[] morningStarts = {
                 LocalTime.of(6, 20), LocalTime.of(7, 20),
                 LocalTime.of(8, 20), LocalTime.of(9, 20)
             };
             for (LocalTime start : morningStarts) {
-                RowingSession session = createSession(date, start, start.plusHours(1));
+                RowingSession session = createSession(club, date, start, start.plusHours(1));
                 addDefaultBoats(session);
             }
 
-            // Afternoon sessions: 16:20, 17:20, 18:20, 19:20, 20:20
             LocalTime[] afternoonStarts = {
                 LocalTime.of(16, 20), LocalTime.of(17, 20),
                 LocalTime.of(18, 20), LocalTime.of(19, 20),
                 LocalTime.of(20, 20)
             };
             for (LocalTime start : afternoonStarts) {
-                RowingSession session = createSession(date, start, start.plusHours(1));
+                RowingSession session = createSession(club, date, start, start.plusHours(1));
                 addDefaultBoats(session);
             }
         }
-        log.info("Created sessions for the next 14 days (excluding Mondays)");
+        log.info("Created sessions for {} for the next 14 days (excluding Mondays)", club.getName());
     }
 
-    private RowingSession createSession(LocalDate date, LocalTime start, LocalTime end) {
+    private RowingSession createSession(Club club, LocalDate date, LocalTime start, LocalTime end) {
         return sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(date)
                 .startTime(start)
                 .endTime(end)
@@ -154,44 +223,48 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void addDefaultBoats(RowingSession session) {
-        // Two 4-person coastal boats
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(4)
                 .isBasicTrainingBoat(true).currentBookings(0)
-                .name("Coastal 4x A").build());
+                .hasCoxSeat(true)
+                .name("Coastal 4x+ A").build());
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(4)
                 .isBasicTrainingBoat(false).currentBookings(0)
+                .hasCoxSeat(false)
                 .name("Coastal 4x B").build());
 
-        // Two 2-person coastal boats
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(2)
                 .isBasicTrainingBoat(false).currentBookings(0)
+                .hasCoxSeat(false)
                 .name("Coastal 2x A").build());
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(2)
                 .isBasicTrainingBoat(false).currentBookings(0)
+                .hasCoxSeat(false)
                 .name("Coastal 2x B").build());
 
-        // Two 1-person coastal boats
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(1)
                 .isBasicTrainingBoat(false).currentBookings(0)
+                .hasCoxSeat(false)
                 .name("Coastal 1x A").build());
         boatRepository.save(Boat.builder()
                 .session(session).type(BoatType.COASTAL).capacity(1)
                 .isBasicTrainingBoat(false).currentBookings(0)
+                .hasCoxSeat(false)
                 .name("Coastal 1x B").build());
     }
 
-    private void seedCredits(List<User> users) {
+    private void seedCredits(List<User> users, Club club) {
         for (User user : users) {
-            if (user.getRole() == Role.ADMIN) continue;
+            if (user.getRole() == Role.CLUB_ADMIN || user.getRole() == Role.TRAINER) continue;
 
             BigDecimal credits = BigDecimal.valueOf(5 + (int) (Math.random() * 16));
             ledgerRepository.save(FinancialLedger.builder()
                     .user(user)
+                    .club(club)
                     .amount(credits)
                     .reason("Initial credit allocation")
                     .runningBalance(credits)
@@ -199,6 +272,6 @@ public class DataSeeder implements CommandLineRunner {
                     .expirationDate(LocalDateTime.now().plusMonths(3))
                     .build());
         }
-        log.info("Seeded credits for all users");
+        log.info("Seeded credits for members in {}", club.getName());
     }
 }
