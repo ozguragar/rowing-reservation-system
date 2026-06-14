@@ -1,0 +1,66 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rowingclub}
+    username: ${SPRING_DATASOURCE_USERNAME:rowing}
+    password: ${SPRING_DATASOURCE_PASSWORD:rowing_secret_2024}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+
+  # Flyway is opt-in. When enabling, also build with `mvn -Pflyway package` so the
+  # flyway-core artifact is on the classpath, switch hibernate ddl-auto to `validate`,
+  # and set SPRING_FLYWAY_BASELINE_ON_MIGRATE=true for existing databases.
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:false}
+    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:true}
+    locations: classpath:db/migration
+
+sentry:
+  dsn: ${SENTRY_DSN:}
+
+server:
+  port: 8080
+  # Graceful shutdown: let in-flight requests drain for up to 30s on SIGTERM
+  shutdown: graceful
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:c2VjdXJlLXJvd2luZy1jbHViLWp3dC1zZWNyZXQta2V5LTIwMjQtcHJvZHVjdGlvbi1yZWFkeQ==}
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+  booking:
+    student-booking-hour: ${STUDENT_BOOKING_HOUR:16}
+    student-next-day-only: false
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+---
+# Production profile — activate with SPRING_PROFILES_ACTIVE=prod
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    hibernate:
+      ddl-auto: validate    # Never mutate schema in prod; use explicit migrations
+
+logging:
+  pattern:
+    console: "{\"time\":\"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}\",\"level\":\"%level\",\"logger\":\"%logger{40}\",\"thread\":\"%thread\",\"msg\":\"%replace(%msg){'\"','\\\"'}\"}%n"
+  level:
+    root: INFO
+    com.rowingclub: INFO

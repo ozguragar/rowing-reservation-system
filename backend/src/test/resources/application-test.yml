@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+app:
+  jwt:
+    secret: dGVzdC1zZWNyZXQta2V5LWZvci1yb3dpbmctY2x1Yi10ZXN0cy0yMDI0LXNlY3VyZQ==
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+  booking:
+    student-booking-hour: 16
+    student-next-day-only: false
+  cors:
+    allowed-origins: http://localhost:3000
