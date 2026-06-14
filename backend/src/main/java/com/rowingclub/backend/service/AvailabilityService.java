@@ -4,6 +4,7 @@ import com.rowingclub.backend.dto.SessionDto;
 import com.rowingclub.backend.entity.RowingSession;
 import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.entity.UserAvailability;
+import com.rowingclub.backend.exception.BusinessException;
 import com.rowingclub.backend.exception.ResourceNotFoundException;
 import com.rowingclub.backend.repository.RowingSessionRepository;
 import com.rowingclub.backend.repository.UserAvailabilityRepository;
@@ -27,6 +28,9 @@ public class AvailabilityService {
     public void setAvailability(String userEmail, Long sessionId) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getClub() != null && !user.getClub().getFeatureAvailabilityModule()) {
+            throw new BusinessException("Availability module is disabled for your club");
+        }
         RowingSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
 

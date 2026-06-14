@@ -1,5 +1,6 @@
 package com.rowingclub.backend.entity;
 
+import com.rowingclub.backend.enums.MemberType;
 import com.rowingclub.backend.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -15,6 +16,10 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_id")
+    private Club club;
+
     @Column(nullable = false)
     private String fullName;
 
@@ -28,6 +33,9 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    @Enumerated(EnumType.STRING)
+    private MemberType memberType;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean isFinishedBasicTraining = false;
@@ -39,6 +47,10 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private Integer lessonsAttended = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isCox = false;
 
     private String refreshToken;
 }

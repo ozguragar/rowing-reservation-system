@@ -35,7 +35,7 @@ public class UserController {
         UserDto caller = userService.getUserByEmail(auth.getName());
         boolean isAdmin = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch(a -> a.equals("ROLE_ADMIN"));
+                .anyMatch(a -> a.equals("SUPERADMIN") || a.equals("CLUB_ADMIN") || a.equals("TRAINER"));
         if (!isAdmin && !caller.getId().equals(id)) {
             throw new AccessDeniedException("You can only view your own profile");
         }

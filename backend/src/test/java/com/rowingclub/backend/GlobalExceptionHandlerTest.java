@@ -40,7 +40,7 @@ class GlobalExceptionHandlerTest {
         User admin = userRepository.save(User.builder()
                 .fullName("Ex Admin").email("ex_admin@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.ADMIN).isFinishedBasicTraining(true)
+                .role(Role.CLUB_ADMIN).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
         adminToken = jwtService.generateAccessToken(admin.getEmail(), admin.getRole().name());
     }

@@ -1,0 +1,31 @@
+hey bro, we are expanding this student rowing club reservation app from a single-club application to a multi-tenant platform. This is a development that touches database schemas, role authorization, and boat management. Implement the following requirements:
+
+1. Database Refactor
+Add a `clubs` table. Scope all existing relevant tables (users, sessions, boats, etc.) to belong to a specific club. If exists, migrate all existing application data to a default club.
+
+2. Superadmin Role & Feature Toggles
+Create a `Superadmin` role that acts on behalf of all roles and can moderate all clubs using the application. Superadmin can log in to any account with only email. Superadmin role created only by seeding and can change its password. Build a superadmin dashboard designed specifically to control feature toggles for each club. The dashboard must include explicit toggles to include/exclude the following specific features per club:
+ Availability module (on/off)
+ Cancellation requests (on/off)
+ Auto-scheduler (on/off)
+ Show booked members (on/off)
+This is important for developing new features. When a club created all features on by default.
+
+3. Club-Level Roles & Permissions
+The application should support the following club-specific roles:
+ Club Admin: Can moderate all users and all sessions within their own club. Like the current admin role.
+ Trainer: Can move members across sessions and create/delete new reservations for created sessions, utilizing the current ledger deduction row logic. Trainers can manage all sessions within their own club, but they cannot manage users, credits, or system settings.
+ Member: Merge the existing student and club member roles into a single `MEMBER` role. Add a new `member_type` attribute to this role with this booking rules:
+   STUDENT: Can only book after 16:00, and is restricted to next-day sessions when the relevant feature toggle is on.
+   RECREATIONAL: Can book anytime, but is blocked from tomorrow's sessions after the cutoff time.
+   DEFAULT: Has no time restrictions.
+
+4. Boat Management
+ Add an option in the "add boat" menu in club admin daily planner to include a cox seat.
+ A cox seat is a single additional seat per boat that doesn't count toward the standard rowing capacity.
+ Add a "cox" boolean attribute to users. Only users with "cox=true" can be assigned to the cox seat. Assignment to cox seat doesn't require credits.
+ Users with the trainer role are automatically eligible to sit in the cox seat.
+ Trainers assigned to cox seats by default but if there is any cox in boat creation, any cox-eligible user can select cox seat during booking.
+
+5. Seed Data & Testing
+ Refactor the seed data generation for testing purposes. Seed one superadmin account. Create exactly 3 clubs. Each club must be seeded with exactly: 1 Club Admin, 2 Trainers, and 30 Members of mixed member types. Seed sessions and boats as in the previous seeder with current date.

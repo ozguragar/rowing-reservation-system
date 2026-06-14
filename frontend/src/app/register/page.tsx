@@ -9,7 +9,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('STUDENT');
+  const [role, setRole] = useState('MEMBER');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -60,8 +60,8 @@ export default function RegisterPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">I am a</label>
             <select value={role} onChange={(e) => setRole(e.target.value)} className="input">
-              <option value="STUDENT">Student</option>
-              <option value="CLUB_MEMBER">Club Member</option>
+              <option value="MEMBER">Member</option>
+              <option value="TRAINER">Trainer</option>
             </select>
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full">

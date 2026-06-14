@@ -20,6 +20,10 @@ public class FinancialLedger {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_id", nullable = false)
+    private Club club;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 

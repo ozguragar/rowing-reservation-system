@@ -43,7 +43,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health/**").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/superadmin/login").permitAll()
+                .requestMatchers("/api/superadmin/**").hasAuthority("SUPERADMIN")
+                .requestMatchers("/api/admin/**").hasAnyAuthority("CLUB_ADMIN", "SUPERADMIN", "TRAINER")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)

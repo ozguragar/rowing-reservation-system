@@ -12,7 +12,8 @@ export function tomorrowStr(): string {
 
 export function getWeekDates(date: Date): Date[] {
   const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay() + 1);
+  const day = start.getDay();
+  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(d.getDate() + i);

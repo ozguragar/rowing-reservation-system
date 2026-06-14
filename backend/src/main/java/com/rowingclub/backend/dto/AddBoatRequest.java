@@ -10,5 +10,6 @@ public class AddBoatRequest {
     @NotNull
     private Integer capacity;
     private Boolean isBasicTrainingBoat = false;
+    private Boolean hasCoxSeat = false;
     private String name;
 }

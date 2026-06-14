@@ -128,8 +128,8 @@ function LedgerInner() {
     } catch (e: any) { toast(e.response?.data?.message || 'Failed'); }
   }
 
-  const activeMembers = users.filter(u => (u.creditBalance || 0) > 0 && u.role === 'CLUB_MEMBER').length;
-  const activeStudents = users.filter(u => (u.creditBalance || 0) > 0 && u.role === 'STUDENT').length;
+  const activeMembers = users.filter(u => (u.creditBalance || 0) > 0 && u.role === 'MEMBER').length;
+  const activeStudents = users.filter(u => (u.creditBalance || 0) > 0 && u.role === 'TRAINER').length;
 
   if (selectedUser) {
     return (
@@ -281,8 +281,8 @@ function LedgerInner() {
           </div>
           <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="input w-auto">
             <option value="all">All Roles</option>
-            <option value="STUDENT">Students</option>
-            <option value="CLUB_MEMBER">Club Members</option>
+            <option value="MEMBER">Members</option>
+            <option value="TRAINER">Trainers</option>
           </select>
           <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="input w-auto">
             <option value="credits">Sort by Credits</option>
@@ -302,7 +302,7 @@ function LedgerInner() {
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Lessons</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredUsers.filter(u => u.role !== 'ADMIN').map(user => (
+                {filteredUsers.filter(u => u.role === 'MEMBER' || u.role === 'TRAINER').map(user => (
                   <tr key={user.id} className="hover:bg-gray-50 hover:dark:bg-gray-900 cursor-pointer" onClick={() => selectUser(user)}>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user.fullName}</p>
@@ -310,8 +310,8 @@ function LedgerInner() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium',
-                        user.role === 'STUDENT' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300')}>
-                        {user.role === 'CLUB_MEMBER' ? 'Member' : 'Student'}
+                        user.role === 'TRAINER' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300')}>
+                        {user.role === 'TRAINER' ? 'Trainer' : 'Member'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

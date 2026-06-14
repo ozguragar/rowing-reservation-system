@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { Zap, CheckCircle, Users } from 'lucide-react';
 
 export default function SchedulerPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  useEffect(() => {
+    if (user && user.featureAutoScheduler === false) router.replace('/dashboard');
+  }, [user, router]);
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay() + 1);

@@ -18,6 +18,7 @@ public class BoatDto {
     private Integer capacity;
     private Boolean isBasicTrainingBoat;
     private Integer currentBookings;
+    private Boolean hasCoxSeat;
     private Long version;
     private String name;
     private List<BookingDto> bookings;
@@ -30,6 +31,7 @@ public class BoatDto {
                 .capacity(boat.getCapacity())
                 .isBasicTrainingBoat(boat.getIsBasicTrainingBoat())
                 .currentBookings(boat.getCurrentBookings())
+                .hasCoxSeat(boat.getHasCoxSeat())
                 .version(boat.getVersion())
                 .name(boat.getName())
                 .build();

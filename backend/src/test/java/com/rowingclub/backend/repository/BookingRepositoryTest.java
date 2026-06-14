@@ -21,20 +21,30 @@ class BookingRepositoryTest {
     @Autowired private UserRepository userRepository;
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private BoatRepository boatRepository;
+    @Autowired private ClubRepository clubRepository;
 
     private User user;
+    private Club club;
     private int dateOffset = 0;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("BookingRepoTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         user = userRepository.save(User.builder()
                 .fullName("Repo User").email("repo@test.com")
-                .passwordHash("hash").role(Role.STUDENT)
+                .passwordHash("hash").role(Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
     }
 
     private Boat makeBoat() {
         RowingSession session = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(100 + dateOffset++))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.APPROVED).build());
@@ -61,6 +71,7 @@ class BookingRepositoryTest {
     @Test
     void findActiveBookingsByUserId_excludesPast() {
         RowingSession past = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().minusDays(1))
                 .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
                 .status(SessionStatus.APPROVED).build());

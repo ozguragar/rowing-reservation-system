@@ -22,11 +22,11 @@ class UserRepositoryTest {
     void setUp() {
         userRepository.save(User.builder()
                 .fullName("Alice Smith").email("alice@test.com")
-                .passwordHash("hash").role(Role.STUDENT)
+                .passwordHash("hash").role(Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
         userRepository.save(User.builder()
                 .fullName("Bob Jones").email("bob@example.org")
-                .passwordHash("hash").role(Role.CLUB_MEMBER)
+                .passwordHash("hash").role(Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
     }
 

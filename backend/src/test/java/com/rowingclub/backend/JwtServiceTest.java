@@ -17,9 +17,9 @@ class JwtServiceTest {
 
     @Test
     void accessTokenContainsEmailAndRole() {
-        String token = jwtService.generateAccessToken("user@test.com", "STUDENT");
+        String token = jwtService.generateAccessToken("user@test.com", "MEMBER");
         assertEquals("user@test.com", jwtService.extractEmail(token));
-        assertEquals("STUDENT", jwtService.extractRole(token));
+        assertEquals("MEMBER", jwtService.extractRole(token));
     }
 
     @Test
@@ -31,13 +31,13 @@ class JwtServiceTest {
 
     @Test
     void validTokenIsValid() {
-        String token = jwtService.generateAccessToken("user@test.com", "ADMIN");
+        String token = jwtService.generateAccessToken("user@test.com", "CLUB_ADMIN");
         assertTrue(jwtService.isTokenValid(token));
     }
 
     @Test
     void tamperedTokenIsInvalid() {
-        String token = jwtService.generateAccessToken("user@test.com", "STUDENT");
+        String token = jwtService.generateAccessToken("user@test.com", "MEMBER");
         String tampered = token.substring(0, token.length() - 5) + "XXXXX";
         assertFalse(jwtService.isTokenValid(tampered));
     }
@@ -49,8 +49,8 @@ class JwtServiceTest {
 
     @Test
     void differentUsersGetDifferentTokens() {
-        String t1 = jwtService.generateAccessToken("a@test.com", "STUDENT");
-        String t2 = jwtService.generateAccessToken("b@test.com", "STUDENT");
+        String t1 = jwtService.generateAccessToken("a@test.com", "MEMBER");
+        String t2 = jwtService.generateAccessToken("b@test.com", "MEMBER");
         assertNotEquals(t1, t2);
     }
 }

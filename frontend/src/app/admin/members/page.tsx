@@ -19,7 +19,7 @@ export default function AdminMembersPage() {
   const [users, setUsers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'STUDENT' | 'CLUB_MEMBER'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'MEMBER' | 'TRAINER'>('all');
   const [sortBy, setSortBy] = useState<SortKey>('name');
 
   useEffect(() => { load(); }, []);
@@ -35,7 +35,7 @@ export default function AdminMembersPage() {
     }
   }
 
-  const nonAdmins = useMemo(() => users.filter(u => u.role !== 'ADMIN'), [users]);
+  const nonAdmins = useMemo(() => users.filter(u => u.role === 'MEMBER' || u.role === 'TRAINER'), [users]);
   const activeCount = useMemo(
     () => nonAdmins.filter(u => (u.creditBalance ?? 0) > 0).length,
     [nonAdmins]
@@ -102,8 +102,8 @@ export default function AdminMembersPage() {
               data-testid="role-filter"
             >
               <option value="all">All roles</option>
-              <option value="STUDENT">Students</option>
-              <option value="CLUB_MEMBER">Members</option>
+              <option value="MEMBER">Members</option>
+              <option value="TRAINER">Trainers</option>
             </select>
             <select
               value={sortBy}
@@ -133,8 +133,8 @@ export default function AdminMembersPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={u.role === 'STUDENT' ? 'badge-student' : 'badge-member'}>
-                        {u.role === 'STUDENT' ? 'S' : 'M'}
+                      <span className={u.role === 'TRAINER' ? 'badge-student' : 'badge-member'}>
+                        {u.role === 'TRAINER' ? 'T' : 'M'}
                       </span>
                       <Link
                         href={`/account/${u.id}`}

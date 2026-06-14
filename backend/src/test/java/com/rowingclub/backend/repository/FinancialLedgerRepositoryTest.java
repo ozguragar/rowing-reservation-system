@@ -19,21 +19,30 @@ class FinancialLedgerRepositoryTest {
 
     @Autowired private FinancialLedgerRepository ledgerRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private ClubRepository clubRepository;
 
     private User user;
+    private Club club;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("FinLedgerRepoTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         user = userRepository.save(User.builder()
                 .fullName("Ledger Repo User").email("ledgerrepo@test.com")
-                .passwordHash("hash").role(Role.STUDENT)
+                .passwordHash("hash").role(Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
     }
 
     private void saveEntry(BigDecimal amount, LocalDateTime expiration) {
         BigDecimal balance = ledgerRepository.calculateBalance(user.getId()).add(amount);
         ledgerRepository.save(FinancialLedger.builder()
-                .user(user).amount(amount).reason("Test")
+                .club(club).user(user).amount(amount).reason("Test")
                 .runningBalance(balance).timestamp(LocalDateTime.now())
                 .expirationDate(expiration).build());
     }
@@ -51,7 +60,7 @@ class FinancialLedgerRepositoryTest {
     void calculateBalance_zeroForNoEntries() {
         User fresh = userRepository.save(User.builder()
                 .fullName("Fresh").email("fresh@test.com")
-                .passwordHash("hash").role(Role.STUDENT)
+                .passwordHash("hash").role(Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
         assertEquals(0, BigDecimal.ZERO.compareTo(ledgerRepository.calculateBalance(fresh.getId())));
     }

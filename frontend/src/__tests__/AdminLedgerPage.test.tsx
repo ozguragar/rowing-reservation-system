@@ -15,7 +15,7 @@ jest.mock('@/context/DialogContext', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: 'ADMIN', fullName: 'Admin', email: 'a@a.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 }, isLoading: false, isAuthenticated: true }),
+  useAuth: () => ({ user: { id: 1, role: 'CLUB_ADMIN', fullName: 'Admin', email: 'a@a.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, featureCancellation: true, featureAutoScheduler: true }, isLoading: false, isAuthenticated: true }),
   AuthProvider: ({ children }: any) => <>{children}</>,
 }));
 
@@ -33,8 +33,8 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const users = [
-  { id: 1, fullName: 'Alice Smith', email: 'alice@test.com', role: 'STUDENT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 5, creditBalance: 8 },
-  { id: 2, fullName: 'Bob Jones', email: 'bob@test.com', role: 'CLUB_MEMBER', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 2, creditBalance: 0 },
+  { id: 1, fullName: 'Alice Smith', email: 'alice@test.com', role: 'MEMBER', memberType: 'STUDENT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 5, creditBalance: 8 },
+  { id: 2, fullName: 'Bob Jones', email: 'bob@test.com', role: 'MEMBER', memberType: 'DEFAULT', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 2, creditBalance: 0 },
 ];
 
 import AdminLedgerPage from '@/app/admin/ledger/page';

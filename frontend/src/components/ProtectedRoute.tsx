@@ -12,7 +12,7 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
     if (!isLoading && !isAuthenticated) {
       router.push('/login');
     }
-    if (!isLoading && adminOnly && user?.role !== 'ADMIN') {
+    if (!isLoading && adminOnly && user?.role !== 'CLUB_ADMIN' && user?.role !== 'SUPERADMIN' && user?.role !== 'TRAINER') {
       router.push('/dashboard');
     }
   }, [isLoading, isAuthenticated, adminOnly, user, router]);
@@ -26,7 +26,7 @@ export default function ProtectedRoute({ children, adminOnly = false }: { childr
   }
 
   if (!isAuthenticated) return null;
-  if (adminOnly && user?.role !== 'ADMIN') return null;
+  if (adminOnly && user?.role !== 'CLUB_ADMIN' && user?.role !== 'SUPERADMIN' && user?.role !== 'TRAINER') return null;
 
   return <>{children}</>;
 }

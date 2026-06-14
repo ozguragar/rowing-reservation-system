@@ -1,9 +1,11 @@
 package com.rowingclub.backend;
 
+import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.entity.FinancialLedger;
 import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.repository.ClubRepository;
 import com.rowingclub.backend.repository.FinancialLedgerRepository;
 import com.rowingclub.backend.repository.UserRepository;
 import com.rowingclub.backend.service.UserService;
@@ -28,16 +30,25 @@ class UserServiceTest {
     @Autowired private UserService userService;
     @Autowired private UserRepository userRepository;
     @Autowired private FinancialLedgerRepository ledgerRepository;
+    @Autowired private ClubRepository clubRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     private User user;
+    private Club club;
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("UserServiceTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         user = userRepository.save(User.builder()
                 .fullName("Pass User").email("passuser@test.com")
                 .passwordHash(passwordEncoder.encode("oldPass123"))
-                .role(Role.STUDENT).isFinishedBasicTraining(false)
+                .role(Role.MEMBER).isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false).lessonsAttended(3).build());
     }
 
@@ -66,7 +77,7 @@ class UserServiceTest {
     void getUserByEmailPopulatesEarliestExpiration() {
         LocalDateTime future = LocalDateTime.now().plusDays(30);
         ledgerRepository.save(FinancialLedger.builder()
-                .user(user).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(user).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now())
                 .expirationDate(future).build());
 

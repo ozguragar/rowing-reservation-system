@@ -53,6 +53,12 @@ describe('getWeekDates', () => {
       expect(dates[i].getTime() - dates[i - 1].getTime()).toBe(24 * 60 * 60 * 1000);
     }
   });
+
+  test('starting from Sunday returns correct Monday', () => {
+    const dates = getWeekDates(new Date('2026-04-19')); // Sunday
+    expect(dates[0].getDay()).toBe(1);
+    expect(fmt(dates[0])).toBe('2026-04-13');
+  });
 });
 
 describe('endOfDay', () => {

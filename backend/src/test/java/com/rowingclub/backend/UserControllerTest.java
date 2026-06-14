@@ -41,7 +41,7 @@ class UserControllerTest {
         User u = userRepository.save(User.builder()
                 .fullName("UC User").email("ucuser@test.com")
                 .passwordHash(passwordEncoder.encode("currentPass"))
-                .role(Role.STUDENT).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
         token = jwtService.generateAccessToken(u.getEmail(), u.getRole().name());
     }
@@ -91,7 +91,7 @@ class UserControllerTest {
         User other = userRepository.save(User.builder()
                 .fullName("Other").email("other_ctrl@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(com.rowingclub.backend.enums.Role.STUDENT)
+                .role(com.rowingclub.backend.enums.Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
 
         // Caller (first user, token) tries to fetch the OTHER user's profile
@@ -113,12 +113,12 @@ class UserControllerTest {
         User target = userRepository.save(User.builder()
                 .fullName("Target").email("target_ctrl@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(com.rowingclub.backend.enums.Role.STUDENT)
+                .role(com.rowingclub.backend.enums.Role.MEMBER)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
         User admin = userRepository.save(User.builder()
                 .fullName("Admin Ctrl").email("admin_get_ctrl@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(com.rowingclub.backend.enums.Role.ADMIN)
+                .role(com.rowingclub.backend.enums.Role.CLUB_ADMIN)
                 .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
         String adminToken = jwtService.generateAccessToken(admin.getEmail(), admin.getRole().name());
 

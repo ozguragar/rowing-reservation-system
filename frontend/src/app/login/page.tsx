@@ -65,9 +65,10 @@ export default function LoginPage() {
 
         <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500 dark:text-gray-400">
           <p className="font-medium mb-1">Demo Accounts:</p>
-          <p>Admin: admin1@rowingclub.com / admin123</p>
-          <p>Student: student1@university.edu / student123</p>
-          <p>Member: member1@rowingclub.com / member123</p>
+          <p>Superadmin: superadmin@rowingclub.com / superadmin123</p>
+          <p>Club Admin: admin@riversiderowingclub.com / admin123</p>
+          <p>Trainer: trainer1@riversiderowingclub.com / trainer123</p>
+          <p>Member: member1@riversiderowingclub.com / member123</p>
         </div>
       </div>
     </div>

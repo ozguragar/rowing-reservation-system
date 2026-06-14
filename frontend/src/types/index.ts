@@ -2,11 +2,19 @@ export interface User {
   id: number;
   fullName: string;
   email: string;
-  role: 'ADMIN' | 'STUDENT' | 'CLUB_MEMBER';
+  role: 'SUPERADMIN' | 'CLUB_ADMIN' | 'TRAINER' | 'MEMBER';
+  memberType?: 'STUDENT' | 'RECREATIONAL' | 'DEFAULT';
+  clubId?: number;
+  clubName?: string;
+  isCox?: boolean;
   isFinishedBasicTraining: boolean;
   isOnSchoolTeam: boolean;
   lessonsAttended: number;
   creditBalance?: number;
+  featureAvailabilityModule?: boolean;
+  featureCancellationRequests?: boolean;
+  featureAutoScheduler?: boolean;
+  featureShowBookedMembers?: boolean;
 }
 
 export interface AuthResponse {
@@ -22,6 +30,7 @@ export interface Session {
   endTime: string;
   status: 'DRAFT' | 'APPROVED';
   boats?: Boat[];
+  clubName?: string;
 }
 
 export interface Boat {
@@ -30,6 +39,7 @@ export interface Boat {
   type: 'COASTAL' | 'OLYMPIC';
   capacity: number;
   isBasicTrainingBoat: boolean;
+  hasCoxSeat?: boolean;
   currentBookings: number;
   version: number;
   name: string;
@@ -46,7 +56,18 @@ export interface Booking {
   boatName: string;
   sessionId: number;
   status: 'AUTO_ASSIGNED' | 'MANUAL' | 'CANCELLATION_REQUESTED' | 'CANCELED';
+  isCoxSeat?: boolean;
   createdAt: string;
+}
+
+export interface Club {
+  id: number;
+  name: string;
+  createdAt: string;
+  featureAvailabilityModule: boolean;
+  featureCancellationRequests: boolean;
+  featureAutoScheduler: boolean;
+  featureShowBookedMembers: boolean;
 }
 
 export interface LedgerEntry {

@@ -34,6 +34,10 @@ public class Boat {
     @Builder.Default
     private Integer currentBookings = 0;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean hasCoxSeat = false;
+
     @Version
     private Long version;
 

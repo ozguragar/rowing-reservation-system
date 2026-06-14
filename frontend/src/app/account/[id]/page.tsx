@@ -25,7 +25,7 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const isAdmin = viewer?.role === 'ADMIN';
+  const isAdmin = viewer?.role === 'CLUB_ADMIN' || viewer?.role === 'SUPERADMIN' || viewer?.role === 'TRAINER';
   const isOwner = viewer?.id === id;
 
   const load = useCallback(async () => {
@@ -81,8 +81,8 @@ export default function AccountPage() {
             <div className="card">
               <div className="flex items-center gap-4 mb-4">
                 <div className={clsx('w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold',
-                  profile.role === 'ADMIN' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' :
-                  profile.role === 'STUDENT' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' :
+                  (profile.role === 'CLUB_ADMIN' || profile.role === 'SUPERADMIN') ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' :
+                  profile.role === 'TRAINER' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' :
                   'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
                 )}>
                   {profile.fullName.charAt(0)}
@@ -147,11 +147,11 @@ export default function AccountPage() {
               </div>
             )}
 
-            {profile.role !== 'ADMIN' && (
+            {(profile.role === 'MEMBER' || profile.role === 'TRAINER') && (
               <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                 <Award size={14} />
                 <span>
-                  {profile.role === 'STUDENT' ? 'Student' : 'Club member'}
+                  {profile.role === 'TRAINER' ? 'Trainer' : 'Member'}
                   {profile.isOnSchoolTeam && ' · School team'}
                 </span>
               </div>

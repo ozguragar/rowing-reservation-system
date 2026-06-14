@@ -23,7 +23,7 @@ jest.mock('@/context/SettingsContext', () => ({
 }));
 
 const studentUser = { id: 1, fullName: 'Alice Student', email: 'alice@test.com', role: 'STUDENT' as const, isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 };
-const adminUser = { ...studentUser, role: 'ADMIN' as const, fullName: 'Admin User' };
+const adminUser = { ...studentUser, role: 'CLUB_ADMIN' as const, fullName: 'Admin User' };
 
 beforeEach(() => {
   mockLogout.mockReset();

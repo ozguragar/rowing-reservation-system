@@ -44,7 +44,9 @@ class BookingControllerTest {
     @Autowired private JwtService jwtService;
     @Autowired private LedgerService ledgerService;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ClubRepository clubRepository;
 
+    private Club club;
     private User member;
     private User admin;
     private RowingSession session;
@@ -54,6 +56,13 @@ class BookingControllerTest {
 
     @BeforeEach
     void setUp() {
+        club = clubRepository.save(Club.builder()
+                .name("BookingControllerTest Club")
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
+                .build());
         appSettingRepository.save(AppSetting.builder()
                 .settingKey("student_next_day_only").settingValue("false").build());
         appSettingRepository.save(AppSetting.builder()
@@ -62,18 +71,21 @@ class BookingControllerTest {
                 .settingKey("student_booking_hour").settingValue("0").build());
 
         member = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Ctrl Member").email("ctrl_member@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.STUDENT).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         admin = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Ctrl Admin").email("ctrl_admin@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.ADMIN).isFinishedBasicTraining(true)
+                .role(Role.CLUB_ADMIN).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         session = sessionRepository.save(RowingSession.builder()
+                .club(club)
                 .date(LocalDate.now().plusDays(1))
                 .startTime(LocalTime.of(6, 0)).endTime(LocalTime.of(7, 0))
                 .status(SessionStatus.APPROVED).build());
@@ -83,7 +95,7 @@ class BookingControllerTest {
                 .isBasicTrainingBoat(true).currentBookings(0).name("Test Boat").build());
 
         ledgerRepository.save(FinancialLedger.builder()
-                .user(member).amount(BigDecimal.TEN).reason("Credits")
+                .club(club).user(member).amount(BigDecimal.TEN).reason("Credits")
                 .runningBalance(BigDecimal.TEN).timestamp(LocalDateTime.now()).build());
 
         memberToken = jwtService.generateAccessToken(member.getEmail(), member.getRole().name());

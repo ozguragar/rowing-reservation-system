@@ -8,7 +8,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: 'ADMIN', fullName: 'A', email: 'a@t.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0 }, isLoading: false, isAuthenticated: true }),
+  useAuth: () => ({ user: { id: 1, role: 'CLUB_ADMIN', fullName: 'A', email: 'a@t.com', isFinishedBasicTraining: true, isOnSchoolTeam: false, lessonsAttended: 0, featureCancellation: true, featureAutoScheduler: true }, isLoading: false, isAuthenticated: true }),
   AuthProvider: ({ children }: any) => <>{children}</>,
 }));
 

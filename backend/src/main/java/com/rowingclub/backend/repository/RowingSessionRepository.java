@@ -13,4 +13,8 @@ public interface RowingSessionRepository extends JpaRepository<RowingSession, Lo
     List<RowingSession> findByDate(LocalDate date);
     List<RowingSession> findByDateGreaterThanEqualAndStatus(LocalDate date, SessionStatus status);
     List<RowingSession> findByStatus(SessionStatus status);
+
+    List<RowingSession> findByClubIdAndDateBetween(Long clubId, LocalDate start, LocalDate end);
+    List<RowingSession> findByClubIdAndDateGreaterThanEqualAndStatus(Long clubId, LocalDate date, SessionStatus status);
+    List<RowingSession> findByClubIdAndDate(Long clubId, LocalDate date);
 }

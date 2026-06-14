@@ -51,8 +51,19 @@ public class UserService {
                 .stream().map(this::enrich).toList();
     }
 
+    public List<UserDto> searchUsers(Long clubId, String query) {
+        if (clubId == null) return searchUsers(query);
+        return userRepository.searchByClubId(clubId, query)
+                .stream().map(this::enrich).toList();
+    }
+
     public List<UserDto> getAllUsers() {
         return userRepository.findAll().stream().map(this::enrich).toList();
+    }
+
+    public List<UserDto> getAllUsers(Long clubId) {
+        if (clubId == null) return getAllUsers();
+        return userRepository.findByClubId(clubId).stream().map(this::enrich).toList();
     }
 
     public void incrementLessonsAttended(Long userId) {
@@ -80,5 +91,18 @@ public class UserService {
         user.setIsFinishedBasicTraining(finished);
         userRepository.save(user);
         return enrich(user);
+    }
+
+    public User findByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+    }
+
+    @Transactional
+    public void saveRefreshToken(Long userId, String refreshToken) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        user.setRefreshToken(refreshToken);
+        userRepository.save(user);
     }
 }

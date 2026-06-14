@@ -38,7 +38,7 @@ class LedgerServiceTest {
                 .fullName("Ledger Test User")
                 .email("ledger@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.STUDENT)
+                .role(Role.MEMBER)
                 .isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false)
                 .lessonsAttended(0)

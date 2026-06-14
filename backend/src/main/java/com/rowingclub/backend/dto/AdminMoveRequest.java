@@ -11,4 +11,5 @@ public class AdminMoveRequest {
     private Long fromBoatId;
     @NotNull
     private Long toBoatId;
+    private Boolean isCoxSeat;
 }

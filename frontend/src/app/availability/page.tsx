@@ -7,15 +7,17 @@ import api from '@/lib/api';
 import { Session } from '@/types';
 import { useDialog } from '@/context/DialogContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { ChevronLeft, ChevronRight, Check, Calendar } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function AvailabilityPage() {
   const router = useRouter();
   const { settings, loaded } = useSettings();
+  const { user } = useAuth();
   useEffect(() => {
-    if (loaded && settings.disable_availability === 'true') router.replace('/dashboard');
-  }, [loaded, settings, router]);
+    if (loaded && (settings.disable_availability === 'true' || user?.featureAvailabilityModule === false)) router.replace('/dashboard');
+  }, [loaded, settings, user, router]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [myAvailability, setMyAvailability] = useState<number[]>([]);
   const [weekStart, setWeekStart] = useState(() => {
