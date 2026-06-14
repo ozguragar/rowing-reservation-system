@@ -1,0 +1,94 @@
+# Example nginx reverse-proxy config for HTTPS termination.
+#
+# Use case: you front both containers with nginx on a host with real TLS certs
+# (Let's Encrypt via certbot, or similar). Copy this file to `/etc/nginx/sites-available/rowing`,
+# edit the `server_name` and paths, then `ln -s` into `sites-enabled` and `nginx -s reload`.
+#
+# Before starting: run `certbot --nginx -d your-domain.example.com -d api.your-domain.example.com`
+# to obtain certs, or point `ssl_certificate` at your own PEM files.
+
+# ─── Rate limiting zone ────────────────────────────────────────────────────
+# 10 requests/second/IP for auth endpoints (defence-in-depth; the backend also rate-limits)
+limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=10r/s;
+
+# ─── HTTP → HTTPS redirect ─────────────────────────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.example.com api.your-domain.example.com;
+    return 301 https://$host$request_uri;
+}
+
+# ─── Frontend (Next.js) ────────────────────────────────────────────────────
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name your-domain.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/your-domain.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+
+    # Next.js frontend
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+}
+
+# ─── Backend API ───────────────────────────────────────────────────────────
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name api.your-domain.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/api.your-domain.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.your-domain.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Rate-limit auth endpoints specifically (defence-in-depth)
+    location ~ ^/api/auth/ {
+        limit_req zone=auth_limit burst=20 nodelay;
+        proxy_pass http://localhost:8081;
+        include proxy_params;
+    }
+
+    # Health endpoints — no rate limit, no auth
+    location /api/health/ {
+        proxy_pass http://localhost:8081;
+        include proxy_params;
+        access_log off;   # Don't pollute logs with health probes
+    }
+
+    # Everything else
+    location / {
+        proxy_pass http://localhost:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 120s;
+    }
+}

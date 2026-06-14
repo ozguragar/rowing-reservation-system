@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rowing-db
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rowingclub}
+      POSTGRES_USER: ${POSTGRES_USER:-rowing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rowing_secret_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rowing} -d ${POSTGRES_DB:-rowingclub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    image: rowing-backend:latest
+    container_name: rowing-backend
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/rowingclub}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-rowing}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-rowing_secret_2024}
+      JWT_SECRET: ${JWT_SECRET:-c2VjdXJlLXJvd2luZy1jbHViLWp3dC1zZWNyZXQta2V5LTIwMjQtcHJvZHVjdGlvbi1yZWFkeQ==}
+      STUDENT_BOOKING_HOUR: ${STUDENT_BOOKING_HOUR:-16}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Duser.timezone=Europe/Istanbul}
+      TZ: ${TZ:-Europe/Istanbul}
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081/api}
+    image: rowing-frontend:latest
+    container_name: rowing-frontend
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081/api}
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

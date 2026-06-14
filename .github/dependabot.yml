@@ -1,0 +1,60 @@
+# Dependabot: weekly security + version updates
+# Grouped to keep PR volume sane; security patches get individual PRs.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:17"
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+    groups:
+      spring:
+        patterns: ["org.springframework*", "org.springframework.boot*", "org.springframework.security*"]
+      test-deps:
+        patterns: ["org.junit*", "org.mockito*", "com.h2database*", "org.assertj*"]
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:17"
+      timezone: Europe/Istanbul
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    groups:
+      next:
+        patterns: ["next", "@next/*", "eslint-config-next"]
+      react:
+        patterns: ["react", "react-dom", "@types/react*"]
+      test-deps:
+        patterns: ["jest*", "@testing-library/*", "@types/jest"]
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:17"
+      timezone: Europe/Istanbul
+    labels: [dependencies, ci]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    labels: [dependencies, docker]

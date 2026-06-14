@@ -1,0 +1,101 @@
+# Production overlay. Use alongside docker-compose.yml:
+#
+#   cp .env.example .env && edit .env
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences from the default compose file:
+#   - All secrets sourced from .env (gitignored)
+#   - SPRING_PROFILES_ACTIVE=prod → disables DataSeeder, switches ddl-auto to validate,
+#     enables JSON logging, fails fast if JWT_SECRET is the shipped default
+#   - Postgres port 5432 is NOT exposed to the host (accessible only from the Docker network)
+#   - Health checks on backend + frontend (plus restart policy)
+#   - Place behind a reverse proxy (see nginx/nginx.conf) for HTTPS termination
+
+services:
+  postgres:
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: []   # Override: do NOT expose 5432 to the host in prod
+
+  backend:
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      STUDENT_BOOKING_HOUR: ${STUDENT_BOOKING_HOUR:-16}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      APP_AUTH_COOKIE_SECURE: "true"
+      APP_AUTH_COOKIE_SAME_SITE: ${APP_AUTH_COOKIE_SAME_SITE:-Lax}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Duser.timezone=Europe/Istanbul}
+      TZ: ${TZ:-Europe/Istanbul}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/health/ready | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    restart: unless-stopped
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Nightly pg_dump sidecar. Writes compressed dumps to ./backups on the host
+  # with a 14-day retention (configurable via BACKUP_RETENTION_DAYS).
+  # Schedule: every day at 02:17 (off-peak; avoids :00/:30 contention).
+  # Alert on failure by tailing the container log (`docker logs rowing-backup`).
+  backup:
+    image: postgres:16-alpine
+    container_name: rowing-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      TZ: ${TZ:-Europe/Istanbul}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /backups
+        echo "[backup] sidecar started; retention=${BACKUP_RETENTION_DAYS:-14}d"
+        while true; do
+          now=$$(date +%s)
+          target=$$(date -d 'tomorrow 02:17' +%s 2>/dev/null || date -v+1d -v2H -v17M -v0S +%s)
+          sleep_for=$$(( target - now ))
+          if [ "$$sleep_for" -lt 60 ]; then sleep_for=60; fi
+          echo "[backup] next run in $$sleep_for s"
+          sleep "$$sleep_for"
+          ts=$$(date +%Y%m%d_%H%M%S)
+          out="/backups/rowingclub_$$ts.sql.gz"
+          echo "[backup] dumping to $$out"
+          if pg_dump --no-owner --no-privileges --clean --if-exists "$$PGDATABASE" | gzip -9 > "$$out.tmp"; then
+            mv "$$out.tmp" "$$out"
+            echo "[backup] ok $$(du -h "$$out" | cut -f1)"
+          else
+            echo "[backup] FAILED" >&2
+            rm -f "$$out.tmp"
+          fi
+          find /backups -type f -name 'rowingclub_*.sql.gz' -mtime "+${BACKUP_RETENTION_DAYS:-14}" -delete || true
+        done
