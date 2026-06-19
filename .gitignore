@@ -24,6 +24,10 @@ frontend/coverage/
 *.swp
 .DS_Store
 
+# AI
+.codex
+.claude/
+
 # Build artifacts
 *.tar
 *.tsbuildinfo
