@@ -1,26 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import api from '@/lib/api';
+
+interface ClubOption {
+  id: number;
+  name: string;
+}
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('MEMBER');
+  const [clubs, setClubs] = useState<ClubOption[]>([]);
+  const [clubId, setClubId] = useState<number | undefined>(undefined);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const router = useRouter();
+
+  // Load the clubs a new member can join. The backend defaults to the primary
+  // club when none is sent, so registration still works if this call fails.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<ClubOption[]>('/auth/clubs');
+        if (cancelled) return;
+        setClubs(res.data);
+        if (res.data.length > 0) setClubId(res.data[0].id);
+      } catch {
+        /* non-fatal — server falls back to the primary club */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(fullName, email, password, role);
+      await register(fullName, email, password, clubId);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed');
@@ -55,15 +79,18 @@ export default function RegisterPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="input" placeholder="Min 6 characters" required minLength={6} />
+              className="input" placeholder="Min 8 characters" required minLength={8} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">I am a</label>
-            <select value={role} onChange={(e) => setRole(e.target.value)} className="input">
-              <option value="MEMBER">Member</option>
-              <option value="TRAINER">Trainer</option>
-            </select>
-          </div>
+          {clubs.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Club</label>
+              <select value={clubId ?? ''} onChange={(e) => setClubId(Number(e.target.value))} className="input">
+                {clubs.map((club) => (
+                  <option key={club.id} value={club.id}>{club.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Creating account...' : 'Create Account'}
           </button>

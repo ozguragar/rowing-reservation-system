@@ -14,11 +14,11 @@ Deploy the whole stack with `docker compose up`.
 - **Cancellation workflow** — user requests cancel, admin approves (refund) or denies (booking restored). No silent refunds.
 - **Auto-scheduler** — assigns availability-marked users to 4-person coastal boats; never mixes students and club members; skips users without credit or basic training
 - **Admin members directory** — search by name/email, filter by role, sort by name / lessons / credits / nearest expiration / training status, shortcut to per-user ledger
-- **Account pages** — `/account/[id]` for owner-or-admin, shows lessons attended and basic-training status with an admin "mark complete" button when applicable
+- **Account pages** — `/account/[id]` for owner-or-admin: lessons attended, credits, basic-training status, and full **reservation history** (upcoming + past). Club admins can change a member's **role** and **member type** and mark training complete inline
 - **Admin audit trail** — every POST / PUT / PATCH / DELETE call is logged with user, endpoint, timestamp
 - **Full dark mode** — persisted, no FOUC on reload, `prefers-reduced-motion` respected
 - **Responsive UI** — mobile → xl, animated page transitions, animated mobile nav menu with content-push effect
-- **Tests** — 115 backend (JUnit + MockMvc + `@DataJpaTest`) with JaCoCo ≥70% line coverage; 90 frontend (Jest + Testing Library) with Jest coverage thresholds
+- **Tests** — 268 backend (JUnit + MockMvc + `@DataJpaTest`) with JaCoCo ≥70% line coverage; 107 frontend (Jest + Testing Library) with Jest coverage thresholds
 
 ---
 
@@ -61,7 +61,7 @@ docker compose up -d
 open http://localhost:3000
 ```
 
-**On first boot**, the backend auto-seeds 2 admins, 50 students, 40 club members, 108 sessions, 648 boats, and credit balances for every non-admin user (see [Demo accounts](#demo-accounts) below).
+**On first boot** (any non-`prod` profile), `DataSeeder` auto-seeds 1 platform super-admin and 3 clubs, each with 1 club admin, 2 trainers, 30 members, ~13 days of sessions (6 boats apiece), and credit balances for every member (see [Demo accounts](#demo-accounts) below).
 
 To reset the database: `docker compose down -v && docker compose up -d`.
 
@@ -69,15 +69,20 @@ To reset the database: `docker compose down -v && docker compose up -d`.
 
 ## Demo accounts
 
-All demo passwords are plain for ease of testing.
+The app is **multi-tenant**: the seeder (`DataSeeder`, active in every non-`prod` profile) creates one platform `SUPERADMIN` plus **3 clubs**, each fully populated. All demo passwords are plain for ease of testing.
+
+The 3 seeded clubs are `Riverside Rowing Club`, `University Rowing Team`, and `Metropolitan Rowing Association`. Per-club emails use the club name lowercased with spaces removed (e.g. `riversiderowingclub.com`).
 
 | Role | Email pattern | Password | Count |
 |---|---|---|---|
-| Admin | `admin1@rowingclub.com`, `admin2@rowingclub.com` | `admin123` | 2 |
-| Student | `student1@university.edu` … `student50@university.edu` | `student123` | 50 |
-| Club member | `member1@rowingclub.com` … `member40@rowingclub.com` | `member123` | 40 |
+| Super admin (platform) | `superadmin@rowingclub.com` | `superadmin123` | 1 |
+| Club admin | `admin@<club>.com` — e.g. `admin@riversiderowingclub.com` | `admin123` | 1 / club |
+| Trainer | `trainer1@<club>.com`, `trainer2@<club>.com` | `trainer123` | 2 / club |
+| Member | `member1@<club>.com` … `member30@<club>.com` | `member123` | 30 / club |
 
-Each non-admin user starts with a random 5–20 credits and a 3-month expiration. 90% of students and club members have their basic training marked complete; the rest start untrained (visible to admins on `/account/[id]`).
+Each member starts with a random 5–20 credits and a 3-month expiration, a `memberType` of `STUDENT` / `RECREATIONAL` / `DEFAULT` (cycled), and 27 of 30 have basic training marked complete; the rest start untrained (visible to admins on `/account/[id]`).
+
+**Roles**: `SUPERADMIN` (manages clubs across the platform) › `CLUB_ADMIN` (manages one club) › `TRAINER` (admin-area access within a club) › `MEMBER` (books sessions). Public self-registration always creates a plain `MEMBER` — elevated roles are provisioned by an admin.
 
 ---
 
@@ -100,7 +105,7 @@ Each non-admin user starts with a random 5–20 credits and a 3-month expiration
 │   │   │   └── dto/                      # ~20 request/response DTOs
 │   │   ├── main/resources/
 │   │   │   └── application.yml           # Main config
-│   │   └── test/                         # 18 test classes, 115 tests
+│   │   └── test/                         # 28 test classes, 268 tests
 │   ├── Dockerfile
 │   └── pom.xml
 ├── frontend/                             # Next.js 14 / TypeScript
@@ -113,7 +118,7 @@ Each non-admin user starts with a random 5–20 credits and a 3-month expiration
 │   │   ├── context/                      # AuthContext, ThemeContext, DialogContext, SettingsContext
 │   │   ├── lib/                          # api.ts (axios + interceptors), dateUtils.ts
 │   │   ├── types/                        # Shared TS interfaces
-│   │   └── __tests__/                    # 20 Jest suites, 90 tests
+│   │   └── __tests__/                    # 21 Jest suites, 107 tests
 │   ├── Dockerfile
 │   ├── jest.config.js
 │   ├── next.config.js
@@ -132,7 +137,7 @@ Each non-admin user starts with a random 5–20 credits and a 3-month expiration
 
 ```bash
 cd backend
-mvn test        # Runs all 115 tests + JaCoCo (fails if line coverage < 70%)
+mvn test        # Runs all 268 tests + JaCoCo (fails if line coverage < 70%)
 open target/site/jacoco/index.html   # Coverage report
 ```
 
@@ -152,7 +157,7 @@ docker run --rm \
 ```bash
 cd frontend
 npm install
-npm test                   # Runs 90 tests without coverage
+npm test                   # Runs 107 tests without coverage
 npm run test:coverage      # With coverage thresholds enforced
 open coverage/lcov-report/index.html
 ```
@@ -182,6 +187,7 @@ The backend is deliberately on host port **8081** (not 8080) to avoid conflicts 
 | `SPRING_DATASOURCE_PASSWORD` | backend | `rowing_secret_2024` | — replace before production |
 | `JWT_SECRET` | backend | baked-in placeholder | base64-encoded, ≥32 bytes |
 | `STUDENT_BOOKING_HOUR` | backend | `16` | Default cutoff; can be overridden at runtime via admin settings |
+| `APP_SECURITY_AUTH_RATE_LIMIT_PER_MINUTE` | backend | `10` | Auth requests/minute/IP before `429` (login, register, refresh) |
 | `JAVA_TOOL_OPTIONS` | backend | `-Duser.timezone=Europe/Istanbul` | Enforces timezone across JVM |
 | `TZ` | backend | `Europe/Istanbul` | Container-level |
 | `NEXT_PUBLIC_API_URL` | frontend | (baked at build time) | **Must be set during `next build`** — not read at container runtime |

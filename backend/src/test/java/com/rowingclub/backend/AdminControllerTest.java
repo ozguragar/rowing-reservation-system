@@ -179,6 +179,57 @@ class AdminControllerTest {
     }
 
     @Test
+    void adminCanUpdateRoleAndMemberType() throws Exception {
+        User target = userRepository.save(User.builder()
+                .club(club)
+                .fullName("Promote Me").email("promote@test.com")
+                .passwordHash(passwordEncoder.encode("pass"))
+                .role(Role.MEMBER).memberType(MemberType.STUDENT)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
+
+        mockMvc.perform(patch("/api/admin/users/" + target.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "role", "TRAINER", "memberType", "DEFAULT"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("TRAINER"))
+                .andExpect(jsonPath("$.memberType").value("DEFAULT"));
+    }
+
+    @Test
+    void updateUserRequiresAdmin() throws Exception {
+        User target = userRepository.save(User.builder()
+                .club(club)
+                .fullName("Target").email("upd_target@test.com")
+                .passwordHash(passwordEncoder.encode("pass"))
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
+                .isOnSchoolTeam(false).lessonsAttended(0).build());
+
+        mockMvc.perform(patch("/api/admin/users/" + target.getId())
+                        .header("Authorization", "Bearer " + memberToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("role", "TRAINER"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void clubAdminCannotGrantSuperadmin() throws Exception {
+        User target = userRepository.save(User.builder()
+                .club(club)
+                .fullName("No Super").email("nosuper@test.com")
+                .passwordHash(passwordEncoder.encode("pass"))
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
+                .isOnSchoolTeam(false).lessonsAttended(0).build());
+
+        mockMvc.perform(patch("/api/admin/users/" + target.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("role", "SUPERADMIN"))))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
     void setBasicTrainingAsAdminFlipsFlag() throws Exception {
         User other = userRepository.save(User.builder()
                 .fullName("Flip User").email("bt_flip@test.com")

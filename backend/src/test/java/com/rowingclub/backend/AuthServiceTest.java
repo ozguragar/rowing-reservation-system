@@ -3,7 +3,11 @@ package com.rowingclub.backend;
 import com.rowingclub.backend.dto.AuthRequest;
 import com.rowingclub.backend.dto.AuthResponse;
 import com.rowingclub.backend.dto.RegisterRequest;
+import com.rowingclub.backend.entity.Club;
+import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.repository.ClubRepository;
+import com.rowingclub.backend.repository.UserRepository;
 import com.rowingclub.backend.service.AuthService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +24,12 @@ class AuthServiceTest {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ClubRepository clubRepository;
 
     @Test
     void registerNewUser() {
@@ -114,12 +124,66 @@ class AuthServiceTest {
     }
 
     @Test
-    void registerWithNullRoleDefaultsToStudent() {
+    void registerAlwaysCreatesMember() {
         RegisterRequest req = new RegisterRequest();
         req.setFullName("Default Role");
         req.setEmail("defaultrole@test.com");
-        req.setPassword("pass123");
+        req.setPassword("pass1234");
         // role intentionally null
+        AuthResponse response = authService.register(req);
+        assertEquals("MEMBER", response.getUser().getRole());
+    }
+
+    @Test
+    void registerAssignsDefaultClub() {
+        // No clubId given — should fall back to the primary (lowest-id) club so that
+        // the NOT NULL club_id constraint is satisfied.
+        RegisterRequest req = new RegisterRequest();
+        req.setFullName("Club Default");
+        req.setEmail("club_default@test.com");
+        req.setPassword("password1");
+        authService.register(req);
+
+        User saved = userRepository.findByEmail("club_default@test.com").orElseThrow();
+        assertNotNull(saved.getClub(), "new member must belong to a club");
+    }
+
+    @Test
+    void registerHonoursExplicitClubId() {
+        Club club = clubRepository.save(Club.builder()
+                .name("Explicit Club " + System.nanoTime())
+                .featureAvailabilityModule(true).featureCancellationRequests(true)
+                .featureAutoScheduler(true).featureShowBookedMembers(true).build());
+
+        RegisterRequest req = new RegisterRequest();
+        req.setFullName("Explicit Club Member");
+        req.setEmail("explicit_club@test.com");
+        req.setPassword("password1");
+        req.setClubId(club.getId());
+        authService.register(req);
+
+        User saved = userRepository.findByEmail("explicit_club@test.com").orElseThrow();
+        assertEquals(club.getId(), saved.getClub().getId());
+    }
+
+    @Test
+    void registerWithUnknownClubIdFails() {
+        RegisterRequest req = new RegisterRequest();
+        req.setFullName("Bad Club");
+        req.setEmail("bad_club@test.com");
+        req.setPassword("password1");
+        req.setClubId(999_999L);
+        assertThrows(BusinessException.class, () -> authService.register(req));
+    }
+
+    @Test
+    void registerNeverGrantsElevatedRole() {
+        // A self-registering user must not be able to become a TRAINER/admin.
+        RegisterRequest req = new RegisterRequest();
+        req.setFullName("Sneaky Trainer");
+        req.setEmail("sneaky@test.com");
+        req.setPassword("password1");
+        req.setRole("TRAINER");
         AuthResponse response = authService.register(req);
         assertEquals("MEMBER", response.getUser().getRole());
     }

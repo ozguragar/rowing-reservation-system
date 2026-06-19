@@ -128,6 +128,33 @@ class BookingServiceTest {
     }
 
     @Test
+    void getBookingsForUserReturnsHistoryWithSessionDate() {
+        BookingRequest request = new BookingRequest();
+        request.setBoatId(basicBoat.getId());
+        request.setSessionId(session.getId());
+        bookingService.bookSeat(trainedUser.getEmail(), request);
+
+        var history = bookingService.getBookingsForUser(trainedUser.getId());
+
+        assertEquals(1, history.size());
+        var dto = history.get(0);
+        assertEquals(session.getDate(), dto.getSessionDate());
+        assertEquals(LocalTime.of(8, 0), dto.getSessionStartTime());
+        assertEquals("Basic Training 4x", dto.getBoatName());
+    }
+
+    @Test
+    void getBookingsForUserExcludesCanceled() {
+        BookingRequest request = new BookingRequest();
+        request.setBoatId(basicBoat.getId());
+        request.setSessionId(session.getId());
+        var booking = bookingService.bookSeat(trainedUser.getEmail(), request);
+        bookingService.adminRemoveBooking(booking.getId());
+
+        assertTrue(bookingService.getBookingsForUser(trainedUser.getId()).isEmpty());
+    }
+
+    @Test
     void beginnerCannotBookAdvancedBoat() {
         BookingRequest request = new BookingRequest();
         request.setBoatId(advancedBoat.getId());
@@ -469,11 +496,13 @@ class BookingServiceTest {
         appSettingRepository.save(AppSetting.builder()
                 .settingKey("student_booking_hour").settingValue("0").build());
 
+        // The "tomorrow reserved for students" rule applies to RECREATIONAL members;
+        // a DEFAULT member has no time-of-day restriction.
         User member = userRepository.save(User.builder()
                 .club(club)
                 .fullName("After Hour Member").email("after_tomorrow_mem@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.MEMBER).isFinishedBasicTraining(true)
+                .role(Role.MEMBER).memberType(MemberType.RECREATIONAL).isFinishedBasicTraining(true)
                 .isOnSchoolTeam(false).lessonsAttended(0).build());
 
         ledgerRepository.save(FinancialLedger.builder()

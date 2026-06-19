@@ -2,6 +2,8 @@ package com.rowingclub.backend;
 
 import com.rowingclub.backend.entity.*;
 import com.rowingclub.backend.enums.*;
+import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.exception.ResourceNotFoundException;
 import com.rowingclub.backend.repository.*;
 import com.rowingclub.backend.service.AvailabilityService;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,6 +86,39 @@ class AvailabilityServiceTest {
         availabilityService.setAvailability(user.getEmail(), session.getId());
         List<Long> ids = availabilityService.getUserAvailableSessions(user.getEmail());
         assertTrue(ids.contains(session.getId()));
+    }
+
+    @Test
+    void setAvailabilityBlockedWhenClubFeatureDisabled() {
+        Club noAvail = clubRepository.save(Club.builder()
+                .name("No Availability Club")
+                .featureAvailabilityModule(false).featureCancellationRequests(true)
+                .featureAutoScheduler(true).featureShowBookedMembers(true).build());
+        User u = userRepository.save(User.builder()
+                .club(noAvail).fullName("Blocked").email("avail_blocked@test.com")
+                .passwordHash(passwordEncoder.encode("pass"))
+                .role(Role.MEMBER).isFinishedBasicTraining(true)
+                .isOnSchoolTeam(false).lessonsAttended(0).build());
+
+        assertThrows(BusinessException.class,
+                () -> availabilityService.setAvailability(u.getEmail(), session.getId()));
+    }
+
+    @Test
+    void setAvailabilityForMissingSessionThrows() {
+        assertThrows(ResourceNotFoundException.class,
+                () -> availabilityService.setAvailability(user.getEmail(), 999_999L));
+    }
+
+    @Test
+    void availabilityForUnknownUserThrows() {
+        assertThrows(ResourceNotFoundException.class,
+                () -> availabilityService.getUserAvailableSessions("nobody_avail@test.com"));
+    }
+
+    @Test
+    void removeAvailabilityWhenNoneExistsIsNoop() {
+        assertDoesNotThrow(() -> availabilityService.removeAvailability(user.getEmail(), session.getId()));
     }
 
     @Test

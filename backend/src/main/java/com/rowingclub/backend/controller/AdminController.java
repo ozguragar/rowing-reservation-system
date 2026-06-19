@@ -206,6 +206,14 @@ public class AdminController {
         return ResponseEntity.ok(userService.setBasicTrainingFinished(id, finished));
     }
 
+    @PatchMapping("/users/{id}")
+    @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<UserDto> updateUser(
+            @PathVariable Long id, @RequestBody UpdateUserRequest request, Authentication auth) {
+        return ResponseEntity.ok(userService.updateRoleAndType(
+                id, request.getRole(), request.getMemberType(), auth.getName()));
+    }
+
     @GetMapping("/analytics/occupancy")
     @PreAuthorize("hasAnyAuthority('CLUB_ADMIN', 'SUPERADMIN')")
     public ResponseEntity<List<AnalyticsDto>> getOccupancyAnalytics(Authentication auth) {

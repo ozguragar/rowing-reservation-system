@@ -3,11 +3,14 @@ package com.rowingclub.backend.service;
 import com.rowingclub.backend.dto.UserDto;
 import com.rowingclub.backend.entity.FinancialLedger;
 import com.rowingclub.backend.entity.User;
+import com.rowingclub.backend.enums.MemberType;
+import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.exception.BusinessException;
 import com.rowingclub.backend.exception.ResourceNotFoundException;
 import com.rowingclub.backend.repository.FinancialLedgerRepository;
 import com.rowingclub.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,6 +85,60 @@ public class UserService {
         }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+    }
+
+    /**
+     * Admin update of a user's role and/or member type, with guardrails:
+     * <ul>
+     *   <li>You cannot edit your own role/type.</li>
+     *   <li>A non-SUPERADMIN actor may only edit users in their own club.</li>
+     *   <li>Only a SUPERADMIN may grant the SUPERADMIN role.</li>
+     * </ul>
+     * Null fields are left unchanged.
+     */
+    @Transactional
+    public UserDto updateRoleAndType(Long targetId, String role, String memberType, String actingEmail) {
+        User actor = userRepository.findByEmail(actingEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User target = userRepository.findById(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (actor.getId().equals(target.getId())) {
+            throw new BusinessException("You cannot change your own role or member type");
+        }
+
+        boolean actorIsSuperadmin = actor.getRole() == Role.SUPERADMIN;
+        if (!actorIsSuperadmin) {
+            Long actorClub = actor.getClub() != null ? actor.getClub().getId() : null;
+            Long targetClub = target.getClub() != null ? target.getClub().getId() : null;
+            if (actorClub == null || !actorClub.equals(targetClub)) {
+                throw new AccessDeniedException("You can only manage members of your own club");
+            }
+        }
+
+        if (role != null && !role.isBlank()) {
+            Role newRole;
+            try {
+                newRole = Role.valueOf(role.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException("Unknown role: " + role);
+            }
+            if (newRole == Role.SUPERADMIN && !actorIsSuperadmin) {
+                throw new BusinessException("Only a superadmin can grant the superadmin role");
+            }
+            target.setRole(newRole);
+        }
+
+        if (memberType != null && !memberType.isBlank()) {
+            try {
+                target.setMemberType(MemberType.valueOf(memberType.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException("Unknown member type: " + memberType);
+            }
+        }
+
+        userRepository.save(target);
+        return enrich(target);
     }
 
     @Transactional

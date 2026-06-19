@@ -14,4 +14,6 @@ public class RegisterRequest {
     @NotBlank @Size(min = 8, max = 128)
     private String password;
     private String role;
+    /** Club the new member is joining. Optional — defaults to the only/primary club. */
+    private Long clubId;
 }

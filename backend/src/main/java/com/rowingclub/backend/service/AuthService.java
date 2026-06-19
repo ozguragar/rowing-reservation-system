@@ -1,10 +1,12 @@
 package com.rowingclub.backend.service;
 
 import com.rowingclub.backend.dto.*;
+import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.enums.MemberType;
 import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.repository.ClubRepository;
 import com.rowingclub.backend.repository.UserRepository;
 import com.rowingclub.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final ClubRepository clubRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -26,20 +29,20 @@ public class AuthService {
             throw new BusinessException("Email already registered");
         }
 
-        Role role = Role.MEMBER;
-        MemberType memberType = MemberType.DEFAULT;
-        if (request.getRole() != null) {
-            try {
-                role = Role.valueOf(request.getRole().toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
-        }
+        // Every user belongs to a club (club_id is NOT NULL). Public self-registration
+        // joins the requested club, or the primary (lowest-id) club when none is given.
+        Club club = resolveClub(request.getClubId());
 
+        // Public self-registration is always a plain MEMBER. Elevated roles
+        // (TRAINER / CLUB_ADMIN / SUPERADMIN) are provisioned by an admin, never
+        // self-selected — otherwise anyone could sign up as a trainer.
         User user = User.builder()
+                .club(club)
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .role(role)
-                .memberType(memberType)
+                .role(Role.MEMBER)
+                .memberType(MemberType.DEFAULT)
                 .isFinishedBasicTraining(false)
                 .isOnSchoolTeam(false)
                 .lessonsAttended(0)
@@ -52,6 +55,15 @@ public class AuthService {
         userRepository.save(user);
 
         return new AuthResponse(accessToken, refreshToken, UserDto.from(user));
+    }
+
+    private Club resolveClub(Long clubId) {
+        if (clubId != null) {
+            return clubRepository.findById(clubId)
+                    .orElseThrow(() -> new BusinessException("Selected club does not exist"));
+        }
+        return clubRepository.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new BusinessException("Registration is not available yet — no club has been set up"));
     }
 
     @Transactional

@@ -97,11 +97,15 @@ class SuperadminRoleTest {
         com.rowingclub.backend.dto.RegisterRequest req = new com.rowingclub.backend.dto.RegisterRequest();
         req.setFullName("Fake Superadmin");
         req.setEmail("fakesuperadmin@test.com");
-        req.setPassword("pass123");
+        req.setPassword("pass1234");
         req.setRole("SUPERADMIN");
 
-        assertThrows(BusinessException.class, () -> authService.register(req),
-                "Superadmin should only be creatable via seeding, not registration");
+        // Self-registration ignores any client-supplied role and always creates a
+        // plain MEMBER — an attacker can never escalate to SUPERADMIN (or any
+        // elevated role) through the public register endpoint.
+        var response = authService.register(req);
+        assertEquals("MEMBER", response.getUser().getRole(),
+                "Registration must never grant SUPERADMIN; role is forced to MEMBER");
     }
 
     @Test

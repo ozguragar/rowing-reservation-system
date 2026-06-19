@@ -225,6 +225,12 @@ public class BookingService {
                 .stream().map(BookingDto::from).toList();
     }
 
+    /** All non-canceled bookings (past + future) for a user, newest first — for the profile page. */
+    public List<BookingDto> getBookingsForUser(Long userId) {
+        return bookingRepository.findActiveByUserIdFetchSessionBoat(userId)
+                .stream().map(BookingDto::from).toList();
+    }
+
     public List<BookingDto> getBookingsForBoat(Long boatId) {
         return bookingRepository.findByBoatIdAndStatusNot(boatId, BookingStatus.CANCELED)
                 .stream().map(BookingDto::from).toList();

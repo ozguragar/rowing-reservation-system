@@ -18,9 +18,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.rowingclub.backend.enums.BookingStatus;
+import com.rowingclub.backend.entity.Booking;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -136,30 +142,63 @@ public class SessionService {
     }
 
     public List<SessionDto> getApprovedUpcomingSessions() {
-        return sessionRepository.findByDateGreaterThanEqualAndStatus(LocalDate.now(), SessionStatus.APPROVED)
-                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+        return buildSessionDtos(
+                sessionRepository.findByDateGreaterThanEqualAndStatus(LocalDate.now(), SessionStatus.APPROVED));
     }
 
     public List<SessionDto> getApprovedUpcomingSessions(Long clubId) {
         if (clubId == null) return getApprovedUpcomingSessions();
-        return sessionRepository.findByClubIdAndDateGreaterThanEqualAndStatus(clubId, LocalDate.now(), SessionStatus.APPROVED)
-                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+        return buildSessionDtos(sessionRepository.findByClubIdAndDateGreaterThanEqualAndStatus(
+                clubId, LocalDate.now(), SessionStatus.APPROVED));
     }
 
     public List<SessionDto> getSessionsByDateRange(LocalDate start, LocalDate end) {
-        return sessionRepository.findByDateBetween(start, end)
-                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+        return buildSessionDtos(sessionRepository.findByDateBetween(start, end));
     }
 
     public List<SessionDto> getAllSessionsByDateRange(LocalDate start, LocalDate end) {
-        return sessionRepository.findByDateBetween(start, end)
-                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+        return buildSessionDtos(sessionRepository.findByDateBetween(start, end));
     }
 
     public List<SessionDto> getAllSessionsByDateRange(Long clubId, LocalDate start, LocalDate end) {
         if (clubId == null) return getAllSessionsByDateRange(start, end);
-        return sessionRepository.findByClubIdAndDateBetween(clubId, start, end)
-                .stream().map(s -> getSessionWithBoats(s.getId())).toList();
+        return buildSessionDtos(sessionRepository.findByClubIdAndDateBetween(clubId, start, end));
+    }
+
+    /**
+     * Assemble session DTOs (with boats and their bookings) for a list of sessions
+     * using a fixed number of queries — one for all boats, one for all bookings —
+     * instead of the previous per-session / per-boat N+1 fan-out.
+     */
+    private List<SessionDto> buildSessionDtos(List<RowingSession> sessions) {
+        if (sessions.isEmpty()) return List.of();
+
+        List<Long> sessionIds = sessions.stream().map(RowingSession::getId).toList();
+        List<Boat> boats = boatRepository.findBySessionIdIn(sessionIds);
+
+        List<Long> boatIds = boats.stream().map(Boat::getId).toList();
+        Map<Long, List<BookingDto>> bookingsByBoat = boatIds.isEmpty()
+                ? Map.of()
+                : bookingRepository
+                        .findByBoatIdInAndStatusNotFetchUser(boatIds, BookingStatus.CANCELED)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                b -> b.getBoat().getId(),
+                                Collectors.mapping(BookingDto::from, Collectors.toList())));
+
+        Map<Long, List<BoatDto>> boatsBySession = boats.stream().collect(Collectors.groupingBy(
+                boat -> boat.getSession().getId(),
+                Collectors.mapping(boat -> {
+                    BoatDto dto = BoatDto.from(boat);
+                    dto.setBookings(bookingsByBoat.getOrDefault(boat.getId(), List.of()));
+                    return dto;
+                }, Collectors.toList())));
+
+        return sessions.stream().map(session -> {
+            SessionDto dto = SessionDto.from(session);
+            dto.setBoats(boatsBySession.getOrDefault(session.getId(), Collections.emptyList()));
+            return dto;
+        }).toList();
     }
 
     @Transactional

@@ -7,7 +7,7 @@ import api from '@/lib/api';
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (fullName: string, email: string, password: string, role: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string, clubId?: number) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -64,8 +64,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(USER_CACHE_KEY, JSON.stringify(res.data.user));
   }, []);
 
-  const register = useCallback(async (fullName: string, email: string, password: string, role: string) => {
-    const res = await api.post<AuthResponse>('/auth/register', { fullName, email, password, role });
+  const register = useCallback(async (fullName: string, email: string, password: string, clubId?: number) => {
+    const res = await api.post<AuthResponse>('/auth/register', { fullName, email, password, clubId });
     setUser(res.data.user);
     localStorage.setItem(USER_CACHE_KEY, JSON.stringify(res.data.user));
   }, []);
