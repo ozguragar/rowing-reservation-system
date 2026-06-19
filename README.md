@@ -1,4 +1,4 @@
-# Rowing Club Management System
+# Rowing Club Reservation System
 
 An enterprise-grade web application for managing a rowing club's sessions, members, bookings, and finances. Spring Boot backend, Next.js frontend, PostgreSQL database. Ships with JWT auth, role-based access, credit-ledger booking with time-of-day rules, an auto-scheduler for coastal boats, a cancellation-approval workflow, immutable audit logging, and full dark-mode support.
 
@@ -18,7 +18,7 @@ Deploy the whole stack with `docker compose up`.
 - **Admin audit trail** — every POST / PUT / PATCH / DELETE call is logged with user, endpoint, timestamp
 - **Full dark mode** — persisted, no FOUC on reload, `prefers-reduced-motion` respected
 - **Responsive UI** — mobile → xl, animated page transitions, animated mobile nav menu with content-push effect
-- **Tests** — 268 backend (JUnit + MockMvc + `@DataJpaTest`) with JaCoCo ≥70% line coverage; 107 frontend (Jest + Testing Library) with Jest coverage thresholds
+- **Tests** — 300+ backend (JUnit + MockMvc + `@DataJpaTest`) with JaCoCo ≥70% line coverage; 100+ frontend (Jest + Testing Library) with Jest coverage thresholds
 
 ---
 
@@ -41,24 +41,17 @@ Deploy the whole stack with `docker compose up`.
 
 ## Quick start
 
-**Requirements**: Docker, Docker Compose, Node 20, and Java 21 + Maven 3.9 (only needed if you want to run tests locally).
+**Requirements**: Docker, Docker Compose.
 
 ```bash
-# 1. Build the backend image
-DOCKER_BUILDKIT=0 docker build -t rowing-backend -f backend/Dockerfile backend/
+# 1. Build both images
+docker compose build
 
-# 2. Build the frontend — Next.js output must exist before docker build
-cd frontend
-rm -rf .next
-NEXT_PUBLIC_API_URL=http://localhost:8081/api npx next build
-cd ..
-DOCKER_BUILDKIT=0 docker build -t rowing-frontend -f frontend/Dockerfile frontend/
-
-# 3. Bring everything up
+# 2. Bring everything up
 docker compose up -d
 
-# 4. Open the app
-open http://localhost:3000
+# 3. Open the app
+open http://localhost:3001
 ```
 
 **On first boot** (any non-`prod` profile), `DataSeeder` auto-seeds 1 platform super-admin and 3 clubs, each with 1 club admin, 2 trainers, 30 members, ~13 days of sessions (6 boats apiece), and credit balances for every member (see [Demo accounts](#demo-accounts) below).
@@ -93,24 +86,25 @@ Each member starts with a random 5–20 credits and a 3-month expiration, a `mem
 ├── backend/                              # Spring Boot 3.3.5 / Java 21
 │   ├── src/
 │   │   ├── main/java/com/rowingclub/backend/
-│   │   │   ├── controller/               # 8 REST controllers (Auth, User, Booking, Session, Ledger, Availability, Admin, Settings)
-│   │   │   ├── service/                  # 8 services with business rules
-│   │   │   ├── entity/                   # 10 JPA entities
+│   │   │   ├── controller/               # REST controllers (Auth, User, Booking, Session, Ledger, Availability, Admin, Settings)
+│   │   │   ├── service/                  # Business logic services
+│   │   │   ├── entity/                   # JPA entities
 │   │   │   ├── repository/               # Spring Data JPA interfaces
-│   │   │   ├── security/                 # JwtService + JwtAuthenticationFilter
+│   │   │   ├── security/                 # JwtService + JwtAuthenticationFilter + rate limit
 │   │   │   ├── aspect/                   # AuditAspect
 │   │   │   ├── config/                   # SecurityConfig + DataSeeder
 │   │   │   ├── exception/                # BusinessException + GlobalExceptionHandler
 │   │   │   ├── enums/                    # Role, BookingStatus, BoatType, SessionStatus
-│   │   │   └── dto/                      # ~20 request/response DTOs
+│   │   │   └── dto/                      # Request/response DTOs
 │   │   ├── main/resources/
-│   │   │   └── application.yml           # Main config
-│   │   └── test/                         # 28 test classes, 268 tests
-│   ├── Dockerfile
+│   │   │   ├── application.yml           # Main config
+│   │   │   └── db/migration/             # Flyway migrations
+│   │   └── test/                         # 30+ test classes, 300+ tests
+│   ├── Dockerfile                        # Self-contained multi-stage build
 │   └── pom.xml
 ├── frontend/                             # Next.js 14 / TypeScript
 │   ├── src/
-│   │   ├── app/                          # App Router — 17 routes
+│   │   ├── app/                          # App Router — 17+ routes
 │   │   │   ├── page.tsx, layout.tsx
 │   │   │   ├── login, register, dashboard, booking, ledger, availability, settings, account/[id]
 │   │   │   └── admin/{planner, members, ledger, cancellations, analytics, logs, scheduler, messages, settings}
@@ -118,15 +112,23 @@ Each member starts with a random 5–20 credits and a 3-month expiration, a `mem
 │   │   ├── context/                      # AuthContext, ThemeContext, DialogContext, SettingsContext
 │   │   ├── lib/                          # api.ts (axios + interceptors), dateUtils.ts
 │   │   ├── types/                        # Shared TS interfaces
-│   │   └── __tests__/                    # 21 Jest suites, 107 tests
-│   ├── Dockerfile
+│   │   └── __tests__/                    # 20+ Jest suites, 100+ tests
+│   ├── Dockerfile                        # Self-contained multi-stage build (NEXT_PUBLIC_API_URL as build arg)
 │   ├── jest.config.js
 │   ├── next.config.js
 │   ├── tailwind.config.js
 │   └── package.json
-├── docker-compose.yml                    # Postgres + backend + frontend
+├── docker-compose.yml                    # Postgres + backend + frontend (uses .env)
+├── docker-compose.prod.yml               # Production overlay (healthchecks, secrets from .env)
+├── .env.example                          # Template for environment secrets
 ├── README.md                             # You are here
-└── ARCHITECTURE.md                       # Deep technical reference
+├── ARCHITECTURE.md                       # Deep technical reference
+├── PRODUCTION.md                         # Deployment runbook
+├── CHANGELOG.md                          # Release history
+├── nginx/
+│   └── nginx.conf.example                # Reverse-proxy config for HTTPS
+├── loadtest/                             # k6 load-test scripts
+└── .github/workflows/ci.yml              # CI pipeline (test + docker build + Trivy scan)
 ```
 
 ---
@@ -137,19 +139,7 @@ Each member starts with a random 5–20 credits and a 3-month expiration, a `mem
 
 ```bash
 cd backend
-mvn test        # Runs all 268 tests + JaCoCo (fails if line coverage < 70%)
-open target/site/jacoco/index.html   # Coverage report
-```
-
-If you need to run tests in the Docker builder image (avoids local JDK setup):
-
-```bash
-docker run --rm \
-  -v "$(pwd)/backend:/app" \
-  -v "rowing_m2:/root/.m2" \
-  -w /app \
-  rowing-build-cache:latest \
-  mvn test
+mvn test        # Runs all tests + JaCoCo (fails if line coverage < 70%)
 ```
 
 ### Frontend
@@ -157,9 +147,8 @@ docker run --rm \
 ```bash
 cd frontend
 npm install
-npm test                   # Runs 107 tests without coverage
+npm test                   # Runs tests without coverage
 npm run test:coverage      # With coverage thresholds enforced
-open coverage/lcov-report/index.html
 ```
 
 ---
@@ -170,31 +159,30 @@ open coverage/lcov-report/index.html
 |---|---|---|
 | PostgreSQL | `5432` | `5432` |
 | Backend (Spring Boot) | **`8081`** | `8080` |
-| Frontend (Next.js) | `3000` | `3000` |
-
-The backend is deliberately on host port **8081** (not 8080) to avoid conflicts with common proxy/debug tools (`mitmdump`, etc.) that default to 8080. Any direct API consumer (curl, Postman, or a standalone frontend build) must use `http://localhost:8081/api`.
+| Frontend (Next.js) | **`3001`** | **`3001`** |
 
 ---
 
 ## Configuration
 
-### Environment variables (set in `docker-compose.yml`)
+### Environment variables
 
 | Variable | Applies to | Default | Notes |
 |---|---|---|---|
+| `POSTGRES_DB` | postgres | `rowingclub` | |
+| `POSTGRES_USER` | postgres | `rowing` | |
+| `POSTGRES_PASSWORD` | postgres | `rowing_secret_2024` | Replace before production |
 | `SPRING_DATASOURCE_URL` | backend | `jdbc:postgresql://postgres:5432/rowingclub` | |
 | `SPRING_DATASOURCE_USERNAME` | backend | `rowing` | |
-| `SPRING_DATASOURCE_PASSWORD` | backend | `rowing_secret_2024` | — replace before production |
+| `SPRING_DATASOURCE_PASSWORD` | backend | `rowing_secret_2024` | Replace before production |
 | `JWT_SECRET` | backend | baked-in placeholder | base64-encoded, ≥32 bytes |
-| `STUDENT_BOOKING_HOUR` | backend | `16` | Default cutoff; can be overridden at runtime via admin settings |
-| `APP_SECURITY_AUTH_RATE_LIMIT_PER_MINUTE` | backend | `10` | Auth requests/minute/IP before `429` (login, register, refresh) |
-| `JAVA_TOOL_OPTIONS` | backend | `-Duser.timezone=Europe/Istanbul` | Enforces timezone across JVM |
-| `TZ` | backend | `Europe/Istanbul` | Container-level |
-| `NEXT_PUBLIC_API_URL` | frontend | (baked at build time) | **Must be set during `next build`** — not read at container runtime |
+| `STUDENT_BOOKING_HOUR` | backend | `16` | Default cutoff; overridable via admin settings |
+| `APP_CORS_ALLOWED_ORIGINS` | backend | `http://localhost:3001` | Comma-separated |
+| `JAVA_TOOL_OPTIONS` | backend | `-Duser.timezone=Europe/Istanbul` | |
+| `TZ` | backend | `Europe/Istanbul` | |
+| `NEXT_PUBLIC_API_URL` | frontend | `http://localhost:8081/api` | Baked at build time — set via build arg |
 
 ### Runtime admin toggles (via `/admin/settings`)
-
-Every toggle is stored in the `app_settings` table as a string. Flip from the admin UI or via `PUT /api/admin/settings/{key}` with `{ "value": "true" | "false" }`.
 
 | Key | Default | Effect |
 |---|---|---|
@@ -202,73 +190,25 @@ Every toggle is stored in the `app_settings` table as a string. Flip from the ad
 | `student_next_day_only` | `"false"` | When `true`, students can only book sessions for tomorrow |
 | `allow_cancellations` | `"true"` | When `false`, cancellation requests are blocked |
 | `booking_hour_disabled` | `"false"` | Master switch — when `true`, bypasses all time-of-day booking restrictions |
-| `disable_availability` | `"false"` | When `true`, Availability tab is hidden and `/availability` redirects to `/dashboard` |
+| `disable_availability` | `"false"` | When `true`, Availability tab is hidden |
 | `show_booked_members` | `"true"` | When `false`, members can't see who else is on a boat |
-
----
-
-## Common tasks
-
-**Create an admin session**: log in as admin → `/admin/planner` → "New Session" button → pick date/start/end → Create → click the check icon on the session to approve it.
-
-**Give a member credits**: log in as admin → `/admin/members` → click the wallet icon on a member's card → "Add Credit" → enter amount and optional expiration date.
-
-**Approve a cancellation request**: log in as admin → `/admin/cancellations` → Approve or Deny buttons.
-
-**Change the default booking hour**: log in as admin → `/admin/settings` → adjust "Student booking hour" dropdown → Save. Takes effect on the next request — no restart.
-
-**Reset the database**: `docker compose down -v && docker compose up -d`. Volume `pgdata` is destroyed, DataSeeder re-runs.
-
-**Change the frontend API URL**: rebuild the image with a different `NEXT_PUBLIC_API_URL` at `next build` time. The env var in `docker-compose.yml` is cosmetic — Next.js bakes the value into the JS bundle at build.
-
----
-
-## Contributing / development
-
-```bash
-# Backend dev loop (hot-reload with Spring Boot devtools if added, else restart manually)
-cd backend
-mvn spring-boot:run         # Runs on 8080 locally; point frontend NEXT_PUBLIC_API_URL to http://localhost:8080/api
-
-# Frontend dev loop
-cd frontend
-npm install
-npm run dev                 # Hot-reload dev server on http://localhost:3000
-```
-
-Local dev uses the same PostgreSQL container — just make sure `docker compose up -d postgres` is running first.
 
 ---
 
 ## Production deployment
 
-For a real deployment (HTTPS, secret externalization, rate limiting, health checks, runbook, incident playbook), follow **[PRODUCTION.md](./PRODUCTION.md)**. Short version:
+For a real deployment follow **[PRODUCTION.md](./PRODUCTION.md)**. Short version:
 
 ```bash
-cp .env.example .env && $EDITOR .env          # Fill in real secrets
-docker build -t rowing-backend:prod -f backend/Dockerfile backend/
-cd frontend && rm -rf .next && \
-  NEXT_PUBLIC_API_URL=https://api.your-domain.example.com/api npx next build && cd ..
-docker build -t rowing-frontend:prod -f frontend/Dockerfile frontend/
+cp .env.example .env && $EDITOR .env
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-Production mode (`SPRING_PROFILES_ACTIVE=prod`) enables:
-- JWT-secret-is-default fail-fast guard
-- `DataSeeder` is disabled (start with a real admin, not demo accounts)
-- Hibernate `ddl-auto: validate` (schema changes must be explicit)
-- JSON structured logging
-- Docker healthchecks on backend + frontend
-- Postgres port not exposed to the host (Docker network only)
-
-HTTPS termination + security headers + auth rate-limiting (defence in depth) via the included **[nginx/nginx.conf.example](./nginx/nginx.conf.example)**.
-
-## Further reading
-
-For the full technical reference — every API endpoint, database constraint, security detail, business rule, animation keyframe, and deployment nuance — see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
+Place behind the included **[nginx/nginx.conf.example](./nginx/nginx.conf.example)** for HTTPS termination.
 
 ---
 
 ## License
 
-Unlicensed / internal.
+MIT License — see [LICENSE](./LICENSE).
