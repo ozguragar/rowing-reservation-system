@@ -1,6 +1,11 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    # One isolated in-memory database per Spring context. The previous shared
+    # "testdb" broke the full-suite run: when Spring evicted a cached @SpringBootTest
+    # context, Hibernate's create-drop dropped the tables out from under the other
+    # contexts still using the same DB ("Table ... not found (this database is empty)").
+    # ${random.uuid} is resolved once per context, so each context gets its own DB.
+    url: jdbc:h2:mem:rowingtest-${random.uuid};DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -13,6 +18,11 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
 
 app:
+  security:
+    # The auth rate limiter is a JVM-wide singleton keyed by client IP. Every MockMvc
+    # request originates from 127.0.0.1, so the production limit of 10/min would trip
+    # spurious 429s across the suite. Effectively disable it for tests.
+    auth-rate-limit-per-minute: 1000000
   jwt:
     secret: dGVzdC1zZWNyZXQta2V5LWZvci1yb3dpbmctY2x1Yi10ZXN0cy0yMDI0LXNlY3VyZQ==
     access-token-expiration: 900000

@@ -5,6 +5,7 @@ import com.rowingclub.backend.entity.*;
 import com.rowingclub.backend.enums.*;
 import com.rowingclub.backend.repository.*;
 import com.rowingclub.backend.security.JwtService;
+import com.rowingclub.backend.service.ClubService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,9 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Exercises the real superadmin club-feature API:
+ *   GET  /api/superadmin/clubs
+ *   PUT  /api/superadmin/clubs/{clubId}/features   (body: UpdateClubFeaturesRequest)
+ * plus the default-feature behaviour of {@link ClubService#createClub}.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -30,6 +38,8 @@ class FeatureToggleTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private UserRepository userRepository;
+    @Autowired private ClubRepository clubRepository;
+    @Autowired private ClubService clubService;
     @Autowired private JwtService jwtService;
     @Autowired private PasswordEncoder passwordEncoder;
 
@@ -39,111 +49,99 @@ class FeatureToggleTest {
 
     @BeforeEach
     void setUp() {
-        User superadmin = userRepository.save(User.builder()
-                .fullName("Super Admin")
-                .email("sa_toggle@test.com")
-                .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.SUPERADMIN)
-                .isFinishedBasicTraining(true)
-                .isOnSchoolTeam(false)
-                .lessonsAttended(0)
+        Club club = clubRepository.save(Club.builder()
+                .name("FeatureToggle Club " + System.nanoTime())
+                .featureAvailabilityModule(true)
+                .featureCancellationRequests(true)
+                .featureAutoScheduler(true)
+                .featureShowBookedMembers(true)
                 .build());
+        clubId = club.getId();
+
+        User superadmin = userRepository.save(User.builder()
+                .fullName("Super Admin").email("sa_toggle@test.com")
+                .passwordHash(passwordEncoder.encode("pass")).role(Role.SUPERADMIN)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
 
         User clubAdmin = userRepository.save(User.builder()
-                .fullName("Club Admin")
-                .email("ca_toggle@test.com")
-                .passwordHash(passwordEncoder.encode("pass"))
-                .role(Role.CLUB_ADMIN)
-                .isFinishedBasicTraining(true)
-                .isOnSchoolTeam(false)
-                .lessonsAttended(0)
-                .build());
+                .club(club)
+                .fullName("Club Admin").email("ca_toggle@test.com")
+                .passwordHash(passwordEncoder.encode("pass")).role(Role.CLUB_ADMIN)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
 
         superadminToken = jwtService.generateAccessToken(superadmin.getEmail(), superadmin.getRole().name());
         clubAdminToken = jwtService.generateAccessToken(clubAdmin.getEmail(), clubAdmin.getRole().name());
-
-        if (clubAdmin.getClub() != null) {
-            clubId = clubAdmin.getClub().getId();
-        }
     }
 
     @Test
-    void superadminCanToggleAvailabilityModule() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/availability")
+    void superadminCanDisableAvailabilityModule() throws Exception {
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
                         .header("Authorization", "Bearer " + superadminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
-                .andExpect(status().isOk());
+                        .content(objectMapper.writeValueAsString(Map.of("featureAvailabilityModule", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureAvailabilityModule").value(false));
     }
 
     @Test
-    void superadminCanToggleCancellationRequests() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/cancellation_requests")
+    void superadminCanDisableCancellationRequests() throws Exception {
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
                         .header("Authorization", "Bearer " + superadminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
-                .andExpect(status().isOk());
+                        .content(objectMapper.writeValueAsString(Map.of("featureCancellationRequests", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureCancellationRequests").value(false));
     }
 
     @Test
-    void superadminCanToggleAutoScheduler() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/auto_scheduler")
+    void superadminCanDisableAutoScheduler() throws Exception {
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
                         .header("Authorization", "Bearer " + superadminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
-                .andExpect(status().isOk());
+                        .content(objectMapper.writeValueAsString(Map.of("featureAutoScheduler", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureAutoScheduler").value(false));
     }
 
     @Test
-    void superadminCanToggleShowBookedMembers() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/show_booked_members")
+    void superadminCanDisableShowBookedMembers() throws Exception {
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
                         .header("Authorization", "Bearer " + superadminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
-                .andExpect(status().isOk());
+                        .content(objectMapper.writeValueAsString(Map.of("featureShowBookedMembers", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureShowBookedMembers").value(false));
+    }
+
+    @Test
+    void onlyTheTargetedFeatureChanges() throws Exception {
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
+                        .header("Authorization", "Bearer " + superadminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("featureAutoScheduler", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureAutoScheduler").value(false))
+                .andExpect(jsonPath("$.featureAvailabilityModule").value(true))
+                .andExpect(jsonPath("$.featureCancellationRequests").value(true))
+                .andExpect(jsonPath("$.featureShowBookedMembers").value(true));
     }
 
     @Test
     void clubAdminCannotToggleFeatures() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/availability")
+        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features")
                         .header("Authorization", "Bearer " + clubAdminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
+                        .content(objectMapper.writeValueAsString(Map.of("featureAvailabilityModule", false))))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void newClubHasAllFeaturesEnabledByDefault() throws Exception {
-        mockMvc.perform(post("/api/superadmin/clubs")
-                        .header("Authorization", "Bearer " + superadminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("name", "New Test Club"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.features.availability").value(true))
-                .andExpect(jsonPath("$.features.cancellationRequests").value(true))
-                .andExpect(jsonPath("$.features.autoScheduler").value(true))
-                .andExpect(jsonPath("$.features.showBookedMembers").value(true));
-    }
-
-    @Test
-    void disabledFeatureBlocksFunctionality() throws Exception {
-        if (clubId == null) return;
-
-        mockMvc.perform(put("/api/superadmin/clubs/" + clubId + "/features/cancellation_requests")
-                        .header("Authorization", "Bearer " + superadminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("enabled", false))))
-                .andExpect(status().isOk());
+    void newClubHasAllFeaturesEnabledByDefault() {
+        Club created = clubService.createClub("Brand New Club " + System.nanoTime());
+        assertTrue(created.getFeatureAvailabilityModule());
+        assertTrue(created.getFeatureCancellationRequests());
+        assertTrue(created.getFeatureAutoScheduler());
+        assertTrue(created.getFeatureShowBookedMembers());
     }
 
     @Test

@@ -109,6 +109,29 @@ class UserControllerTest {
     }
 
     @Test
+    void getUserBookingsAllowsSelf() throws Exception {
+        User self = userRepository.findByEmail("ucuser@test.com").orElseThrow();
+        mockMvc.perform(get("/api/users/" + self.getId() + "/bookings")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$").isArray());
+    }
+
+    @Test
+    void getUserBookingsRejectsUnauthorizedLookup() throws Exception {
+        User other = userRepository.save(User.builder()
+                .fullName("Other Bk").email("other_bk@test.com")
+                .passwordHash(passwordEncoder.encode("pass"))
+                .role(Role.MEMBER)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
+
+        mockMvc.perform(get("/api/users/" + other.getId() + "/bookings")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getUserByIdAllowsAdminLookup() throws Exception {
         User target = userRepository.save(User.builder()
                 .fullName("Target").email("target_ctrl@test.com")

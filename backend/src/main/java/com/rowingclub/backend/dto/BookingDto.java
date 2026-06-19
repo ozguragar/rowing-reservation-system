@@ -5,7 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
 @Builder
@@ -20,6 +22,9 @@ public class BookingDto {
     private Long boatId;
     private String boatName;
     private Long sessionId;
+    private LocalDate sessionDate;
+    private LocalTime sessionStartTime;
+    private LocalTime sessionEndTime;
     private String status;
     private Boolean isCoxSeat;
     private LocalDateTime createdAt;
@@ -34,6 +39,9 @@ public class BookingDto {
                 .boatId(booking.getBoat().getId())
                 .boatName(booking.getBoat().getName())
                 .sessionId(booking.getSession().getId())
+                .sessionDate(booking.getSession().getDate())
+                .sessionStartTime(booking.getSession().getStartTime())
+                .sessionEndTime(booking.getSession().getEndTime())
                 .status(booking.getStatus().name())
                 .isCoxSeat(booking.getIsCoxSeat())
                 .createdAt(booking.getCreatedAt())

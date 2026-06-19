@@ -40,6 +40,7 @@ class ClubRolesPermissionsTest {
     @Autowired private UserRepository userRepository;
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private BoatRepository boatRepository;
+    @Autowired private BookingRepository bookingRepository;
     @Autowired private FinancialLedgerRepository ledgerRepository;
     @Autowired private AppSettingRepository appSettingRepository;
     @Autowired private JwtService jwtService;
@@ -195,6 +196,13 @@ class ClubRolesPermissionsTest {
                 .currentBookings(0)
                 .name("Target 4x")
                 .build());
+
+        // The member must already be booked on the source boat for a move to be valid.
+        boat.setCurrentBookings(1);
+        boatRepository.save(boat);
+        bookingRepository.save(Booking.builder()
+                .user(member).boat(boat).session(session)
+                .status(BookingStatus.MANUAL).isCoxSeat(false).build());
 
         mockMvc.perform(post("/api/admin/bookings/move")
                         .header("Authorization", "Bearer " + trainerToken)

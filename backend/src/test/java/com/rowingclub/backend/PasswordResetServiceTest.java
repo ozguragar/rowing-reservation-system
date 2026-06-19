@@ -15,6 +15,9 @@ import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.rowingclub.backend.entity.PasswordResetToken;
+
+import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -75,6 +78,35 @@ class PasswordResetServiceTest {
     @Test
     void invalidTokenRejected() {
         assertThatThrownBy(() -> service.resetPassword("not-a-real-token", "brandnew12"))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void usedTokenCannotBeReused() {
+        AtomicReference<String> token = new AtomicReference<>();
+        doAnswer(invocation -> { token.set(invocation.getArgument(1)); return null; })
+                .when(service).sendResetEmail(any(), any());
+        service.requestReset(user.getEmail());
+
+        service.resetPassword(token.get(), "freshpass12");
+        // Re-using the same token must fail (record marked used).
+        assertThatThrownBy(() -> service.resetPassword(token.get(), "anotherpass12"))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void expiredTokenRejected() {
+        AtomicReference<String> token = new AtomicReference<>();
+        doAnswer(invocation -> { token.set(invocation.getArgument(1)); return null; })
+                .when(service).sendResetEmail(any(), any());
+        service.requestReset(user.getEmail());
+
+        // Force the stored token to be expired.
+        PasswordResetToken record = tokenRepository.findAll().get(0);
+        record.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        tokenRepository.save(record);
+
+        assertThatThrownBy(() -> service.resetPassword(token.get(), "freshpass12"))
                 .isInstanceOf(BusinessException.class);
     }
 

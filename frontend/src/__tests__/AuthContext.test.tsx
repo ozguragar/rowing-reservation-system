@@ -29,7 +29,7 @@ function TestConsumer() {
       <span data-testid="user">{user?.email ?? 'none'}</span>
       <button onClick={() => login('a@b.com', 'password1')}>login</button>
       <button onClick={logout}>logout</button>
-      <button onClick={() => register('Name', 'a@b.com', 'password1', 'STUDENT')}>register</button>
+      <button onClick={() => register('Name', 'a@b.com', 'password1', 1)}>register</button>
     </div>
   );
 }

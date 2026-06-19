@@ -1,9 +1,12 @@
 package com.rowingclub.backend;
 
+import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.entity.FinancialLedger;
 import com.rowingclub.backend.entity.User;
 import com.rowingclub.backend.enums.Role;
 import com.rowingclub.backend.exception.BusinessException;
+import com.rowingclub.backend.exception.ResourceNotFoundException;
+import com.rowingclub.backend.repository.ClubRepository;
 import com.rowingclub.backend.repository.FinancialLedgerRepository;
 import com.rowingclub.backend.repository.UserRepository;
 import com.rowingclub.backend.service.LedgerService;
@@ -28,13 +31,22 @@ class LedgerServiceTest {
     @Autowired private LedgerService ledgerService;
     @Autowired private UserRepository userRepository;
     @Autowired private FinancialLedgerRepository ledgerRepository;
+    @Autowired private ClubRepository clubRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     private User testUser;
 
     @BeforeEach
     void setUp() {
+        // Ledger entries inherit the user's club (club_id is NOT NULL), so the test
+        // user must belong to a club.
+        Club club = clubRepository.save(Club.builder()
+                .name("Ledger Test Club " + System.nanoTime())
+                .featureAvailabilityModule(true).featureCancellationRequests(true)
+                .featureAutoScheduler(true).featureShowBookedMembers(true).build());
+
         testUser = userRepository.save(User.builder()
+                .club(club)
                 .fullName("Ledger Test User")
                 .email("ledger@test.com")
                 .passwordHash(passwordEncoder.encode("pass"))
@@ -107,6 +119,43 @@ class LedgerServiceTest {
         ledgerService.deductCredit(testUser.getId(), BigDecimal.valueOf(2), "C");
         BigDecimal balance = ledgerService.getBalance(testUser.getId());
         assertEquals(0, BigDecimal.valueOf(6).compareTo(balance));
+    }
+
+    @Test
+    void getUserLedgerReturnsEntriesNewestFirst() {
+        ledgerService.addCredit(testUser.getId(), BigDecimal.valueOf(5), "first", null);
+        ledgerService.deductCredit(testUser.getId(), BigDecimal.valueOf(2), "second");
+        var ledger = ledgerService.getUserLedger(testUser.getId());
+        assertEquals(2, ledger.size());
+        // Most recent first.
+        assertEquals("second", ledger.get(0).getReason());
+    }
+
+    @Test
+    void refundIncreasesBalance() {
+        ledgerService.addCredit(testUser.getId(), BigDecimal.valueOf(5), "init", null);
+        ledgerService.refundCredit(testUser.getId(), BigDecimal.valueOf(2), "refund");
+        assertEquals(0, BigDecimal.valueOf(7).compareTo(ledgerService.getBalance(testUser.getId())));
+    }
+
+    @Test
+    void deductExactBalanceLeavesZero() {
+        ledgerService.addCredit(testUser.getId(), BigDecimal.valueOf(4), "init", null);
+        ledgerService.deductCredit(testUser.getId(), BigDecimal.valueOf(4), "all");
+        assertEquals(0, BigDecimal.ZERO.compareTo(ledgerService.getBalance(testUser.getId())));
+    }
+
+    @Test
+    void getEarliestExpirationReturnsValueThenNull() {
+        assertNull(ledgerService.getEarliestExpiration(testUser.getId()));
+        ledgerService.addCredit(testUser.getId(), BigDecimal.TEN, "with exp", LocalDateTime.now().plusDays(20));
+        assertNotNull(ledgerService.getEarliestExpiration(testUser.getId()));
+    }
+
+    @Test
+    void updateLedgerEntryNotFoundThrows() {
+        assertThrows(ResourceNotFoundException.class,
+                () -> ledgerService.updateLedgerEntry(999_999L, LocalDateTime.now()));
     }
 
     @Test

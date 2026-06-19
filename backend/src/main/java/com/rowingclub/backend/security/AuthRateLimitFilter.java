@@ -32,17 +32,20 @@ import java.util.stream.Collectors;
 @Order(1)
 public class AuthRateLimitFilter extends OncePerRequestFilter {
 
-    private static final int MAX_REQUESTS = 10;
     private static final Duration WINDOW = Duration.ofMinutes(1);
     private static final Duration EVICTION_AFTER = WINDOW.multipliedBy(2);
     private static final int MAX_BUCKETS = 100_000;  // Hard cap against runaway growth
 
+    /** Requests per minute per IP. Tunable so tests (and high-traffic deploys) can raise it. */
+    private final int maxRequests;
     private final Set<String> trustedProxies;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     private volatile Instant lastCleanup = Instant.now();
 
     public AuthRateLimitFilter(
-            @Value("${app.security.trusted-proxies:}") String trustedProxiesCsv) {
+            @Value("${app.security.trusted-proxies:}") String trustedProxiesCsv,
+            @Value("${app.security.auth-rate-limit-per-minute:10}") int maxRequests) {
+        this.maxRequests = maxRequests;
         this.trustedProxies = trustedProxiesCsv == null || trustedProxiesCsv.isBlank()
                 ? Set.of()
                 : java.util.Arrays.stream(trustedProxiesCsv.split(","))
@@ -72,7 +75,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         }
 
         Bucket b = buckets.computeIfAbsent(clientIp, k -> new Bucket());
-        if (!b.tryAcquire()) {
+        if (!b.tryAcquire(maxRequests)) {
             res.setStatus(429);
             res.setHeader("Retry-After", String.valueOf(WINDOW.getSeconds()));
             res.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -115,13 +118,13 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         private Instant windowStart = Instant.now();
         private int count = 0;
 
-        synchronized boolean tryAcquire() {
+        synchronized boolean tryAcquire(int maxRequests) {
             Instant now = Instant.now();
             if (Duration.between(windowStart, now).compareTo(WINDOW) >= 0) {
                 windowStart = now;
                 count = 0;
             }
-            if (count >= MAX_REQUESTS) return false;
+            if (count >= maxRequests) return false;
             count++;
             return true;
         }

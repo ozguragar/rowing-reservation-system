@@ -55,6 +55,9 @@ export interface Booking {
   boatId: number;
   boatName: string;
   sessionId: number;
+  sessionDate?: string;
+  sessionStartTime?: string;
+  sessionEndTime?: string;
   status: 'AUTO_ASSIGNED' | 'MANUAL' | 'CANCELLATION_REQUESTED' | 'CANCELED';
   isCoxSeat?: boolean;
   createdAt: string;

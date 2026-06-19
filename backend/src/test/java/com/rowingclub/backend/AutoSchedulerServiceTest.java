@@ -206,6 +206,91 @@ class AutoSchedulerServiceTest {
         }
     }
 
+    private User availableUser(String email, Club c, RowingSession sess, int credits) {
+        User u = userRepository.save(User.builder()
+                .club(c).fullName(email).email(email)
+                .passwordHash(passwordEncoder.encode("pass")).role(Role.MEMBER)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).build());
+        if (credits > 0) {
+            ledgerRepository.save(FinancialLedger.builder()
+                    .club(c).user(u).amount(BigDecimal.valueOf(credits)).reason("c")
+                    .runningBalance(BigDecimal.valueOf(credits)).timestamp(LocalDateTime.now()).build());
+        }
+        availabilityRepository.save(UserAvailability.builder().user(u).session(sess).build());
+        return u;
+    }
+
+    @Test
+    void schedulerSkipsUsersWithoutCredit() {
+        boatRepository.save(Boat.builder()
+                .session(session).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(0).name("4x NoCredit").build());
+        for (int i = 0; i < 4; i++) availableUser("nocredit" + i + "@test.com", club, session, 0);
+
+        Map<String, Object> result = autoSchedulerService.runScheduler(session.getDate());
+        assertEquals(0, (int) result.get("totalAssigned"));
+    }
+
+    @Test
+    void schedulerExcludesAlreadyBookedUser() {
+        boatRepository.save(Boat.builder()
+                .session(session).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(0).name("4x Mix").build());
+        Boat sideBoat = boatRepository.save(Boat.builder()
+                .session(session).type(BoatType.COASTAL).capacity(2)
+                .isBasicTrainingBoat(false).currentBookings(1).name("2x side").build());
+
+        availableUser("avail_a@test.com", club, session, 10);
+        availableUser("avail_b@test.com", club, session, 10);
+        availableUser("avail_c@test.com", club, session, 10);
+        User booked = availableUser("avail_booked@test.com", club, session, 10);
+        bookingRepository.save(Booking.builder()
+                .user(booked).boat(sideBoat).session(session)
+                .status(BookingStatus.MANUAL).isCoxSeat(false).build());
+
+        Map<String, Object> result = autoSchedulerService.runScheduler(session.getDate());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> assignments = (List<Map<String, Object>>) result.get("assignments");
+
+        assertEquals(3, (int) result.get("totalAssigned"));
+        assertTrue(assignments.stream().noneMatch(a -> booked.getId().equals(a.get("userId"))));
+    }
+
+    @Test
+    void schedulerSkipsClubWithFeatureDisabled() {
+        Club offClub = clubRepository.save(Club.builder()
+                .name("Scheduler Off Club")
+                .featureAvailabilityModule(true).featureCancellationRequests(true)
+                .featureAutoScheduler(false).featureShowBookedMembers(true).build());
+        LocalDate farDate = LocalDate.now().plusDays(60);
+        RowingSession offSession = sessionRepository.save(RowingSession.builder()
+                .club(offClub).date(farDate).startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(9, 0)).status(SessionStatus.APPROVED).build());
+        boatRepository.save(Boat.builder()
+                .session(offSession).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(0).name("4x Off").build());
+        for (int i = 0; i < 4; i++) availableUser("off" + i + "@test.com", offClub, offSession, 10);
+
+        Map<String, Object> result = autoSchedulerService.runScheduler(farDate);
+        assertEquals(0, (int) result.get("totalAssigned"));
+    }
+
+    @Test
+    void schedulerDeductsCreditAndIncrementsLessons() {
+        boatRepository.save(Boat.builder()
+                .session(session).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(0).name("4x Effects").build());
+        User u1 = availableUser("eff1@test.com", club, session, 5);
+        availableUser("eff2@test.com", club, session, 5);
+        availableUser("eff3@test.com", club, session, 5);
+
+        autoSchedulerService.runScheduler(session.getDate());
+
+        User refreshed = userRepository.findById(u1.getId()).orElseThrow();
+        assertEquals(1, refreshed.getLessonsAttended());
+        assertEquals(0, BigDecimal.valueOf(4).compareTo(ledgerRepository.calculateBalance(u1.getId())));
+    }
+
     @Test
     void schedulerIgnoresTwoPersonBoats() {
         Boat twoPerson = boatRepository.save(Boat.builder()

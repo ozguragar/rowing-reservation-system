@@ -296,7 +296,8 @@ All paths prefixed `/api`. Body schemas reference DTOs in `src/main/java/com/row
 
 | Method | Path | Body | Returns | Description |
 |---|---|---|---|---|
-| `POST` | `/register` | `RegisterRequest { fullName, email, password, role? }` | `AuthResponse { accessToken, refreshToken, user }` | Creates a new user and returns a token pair. Defaults role to STUDENT if absent. Validation: `@NotBlank` on all fields, password `@Size(min=6)`, `@Email`. |
+| `POST` | `/register` | `RegisterRequest { fullName, email, password, clubId? }` | `AuthResponse { accessToken, refreshToken, user }` | Creates a new user (always role `MEMBER`; any client-supplied role is ignored) joined to `clubId` or the primary club by default, and returns a token pair. Validation: `@NotBlank` on all fields, password `@Size(min=8)`, `@Email`. |
+| `GET` | `/clubs` | — | `[{ id, name }]` | Public list of clubs for the registration page's club picker. |
 | `POST` | `/login` | `AuthRequest { email, password }` | `AuthResponse` | Validates credentials (BCrypt compare) and returns a new token pair. Rotates refresh token on `User`. |
 | `POST` | `/refresh` | `{ refreshToken }` | `AuthResponse` | Validates refresh token, checks it matches `User.refreshToken`, issues new pair. |
 
@@ -306,6 +307,7 @@ All paths prefixed `/api`. Body schemas reference DTOs in `src/main/java/com/row
 |---|---|---|---|---|
 | `GET` | `/me` | — | `UserDto` | Returns current user (with `creditBalance`, `earliestCreditExpiration` populated). |
 | `GET` | `/{id}` | — | `UserDto` | Returns any user by id. Backend gated to self or admin (SUPERADMIN/CLUB_ADMIN/TRAINER). |
+| `GET` | `/{id}/bookings` | — | `List<BookingDto>` | A user's full reservation history (past + future, newest first, excludes canceled). Self-or-admin, same gate as `/{id}`. `BookingDto` carries `sessionDate/sessionStartTime/sessionEndTime`. |
 | `POST` | `/me/password` | `ChangePasswordRequest { currentPassword, newPassword }` | `{ message }` | Changes own password after verifying current. `newPassword` `@Size(min=6)`. |
 
 ### 5.3 `BookingController` — `/api/bookings` (authenticated)
@@ -395,6 +397,7 @@ Grouped by functional area.
 | `GET` | `/users` | — | `List<UserDto>` (all users, with credit balance + earliest expiration) |
 | `GET` | `/users/search?q=...` | — | `List<UserDto>` (case-insensitive name/email contains) |
 | `PATCH` | `/users/{id}/basic-training` | `{ finished: boolean }` | `UserDto` |
+| `PATCH` | `/users/{id}` | `UpdateUserRequest { role?, memberType? }` | `UserDto` — change a member's role / member type. CLUB_ADMIN+SUPERADMIN only. Guardrails: no self-edit; non-superadmins limited to their own club; only SUPERADMIN may grant SUPERADMIN. |
 
 #### Analytics & audit
 
@@ -532,7 +535,7 @@ Ledger rows are **immutable after creation** except for `expiration_date`. Every
 
 ### `AuthService`
 
-- **`register`**: rejects duplicate email; defaults role to STUDENT when omitted or unknown; BCrypt-hashes password; issues both tokens and stores the refresh token on the user row.
+- **`register`**: rejects duplicate email; always creates a `MEMBER` (client-supplied role is ignored, so the public endpoint can never mint a trainer/admin/superadmin); assigns the requested club, or the primary (lowest-id) club when none is given; BCrypt-hashes password; issues both tokens and stores the refresh token on the user row.
 - **`login`**: constant-time-ish BCrypt matcher; issues new tokens and rotates the stored refresh token.
 - **`refresh`**: validates token signature/expiry AND compares to stored `user.refreshToken` (preventing use of older refresh tokens after rotation).
 
@@ -594,7 +597,7 @@ Every successful mutating HTTP call writes an `AuditLog` row with the authentica
 |---|---|---|---|
 | `/` | `app/page.tsx` | anyone | Auth redirect: pushes `/dashboard` if authed, else `/login` |
 | `/login` | `app/login/page.tsx` | anyone | Email/password login; shows demo accounts |
-| `/register` | `app/register/page.tsx` | anyone | Registration with role selector (STUDENT / CLUB_MEMBER) |
+| `/register` | `app/register/page.tsx` | anyone | Self-registration as a `MEMBER`; club picker (shown only when >1 club exists) |
 | `/dashboard` | `app/dashboard/page.tsx` | authenticated | Balance card (links to `/ledger`), lessons, upcoming bookings; admin quick-action chips |
 | `/booking` | `app/booking/page.tsx` | authenticated | Week/day view; amber banners for time restrictions; boat grid; book-button with training/credit/time gates |
 | `/ledger` | `app/ledger/page.tsx` | authenticated | Tabular ledger view + report-issue modal |
@@ -865,15 +868,15 @@ Run: `mvn test` (runs JaCoCo with ≥70% line coverage threshold; build fails if
 
 | Test class | Focus | Count |
 |---|---|---|
-| `AuthServiceTest` | register/login/refresh happy & error paths | 8 |
+| `AuthServiceTest` | register/login/refresh happy & error paths, club assignment, role-forcing | 12 |
 | `BookingServiceTest` | book, cancel (request→approve/deny), time restrictions, basic-training, admin book/move, bypass toggle | 20 |
 | `LedgerServiceTest` | add/deduct/refund, balance math, expiration query | 9 |
-| `SessionServiceTest` | create, approve, copy day/week, delete, boat capacity validation | 10 |
+| `SessionServiceTest` | create, approve, copy day/week, delete, boat capacity validation, batched listing + club scoping | 13 |
 | `AvailabilityServiceTest` | set/remove idempotency, weekly window | 5 |
 | `AnalyticsServiceTest` | occupancy math, zero-boat session | 3 |
 | `AutoSchedulerServiceTest` | 4-person-only, no mixed roles, skips | 4 |
 | `JwtServiceTest` | claims, validity, tamper detection | 6 |
-| `AuthControllerTest` (MockMvc) | register/login/refresh HTTP | 4 |
+| `AuthControllerTest` (MockMvc) | register/login/refresh HTTP, public clubs endpoint, role-spoof rejection | 6 |
 | `BookingControllerTest` | 401 gating, booking lifecycle via HTTP | 5 |
 | `AdminControllerTest` | Admin-only access matrix + happy paths | 12 |
 | `SettingsControllerTest` | public settings auth + payload | 4 |

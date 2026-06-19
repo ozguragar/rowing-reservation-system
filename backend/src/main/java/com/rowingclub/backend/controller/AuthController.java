@@ -1,6 +1,7 @@
 package com.rowingclub.backend.controller;
 
 import com.rowingclub.backend.dto.*;
+import com.rowingclub.backend.repository.ClubRepository;
 import com.rowingclub.backend.security.AuthCookieService;
 import com.rowingclub.backend.service.AuthService;
 import com.rowingclub.backend.service.PasswordResetService;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,6 +24,17 @@ public class AuthController {
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
     private final AuthCookieService authCookieService;
+    private final ClubRepository clubRepository;
+
+    /** Public list of clubs (id + name only) so the registration page can offer a picker. */
+    @GetMapping("/clubs")
+    public ResponseEntity<List<Map<String, Object>>> clubs() {
+        List<Map<String, Object>> clubs = clubRepository.findAll(
+                        org.springframework.data.domain.Sort.by("id")).stream()
+                .map(c -> Map.<String, Object>of("id", c.getId(), "name", c.getName()))
+                .toList();
+        return ResponseEntity.ok(clubs);
+    }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,

@@ -4,6 +4,7 @@ import com.rowingclub.backend.entity.*;
 import com.rowingclub.backend.enums.*;
 import com.rowingclub.backend.entity.Club;
 import com.rowingclub.backend.repository.*;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,27 +47,28 @@ class ClubMultiTenancyTest {
 
     @Test
     void clubsTableExists() {
-        assertDoesNotThrow(() -> {
-            var entityManager = getEntityManagerFromContext();
-            entityManager.createNativeQuery("SELECT id, name FROM clubs").getResultList();
-        }, "clubs table should exist in the database schema");
+        assertDoesNotThrow(() ->
+                entityManager.createNativeQuery("SELECT id, name FROM clubs").getResultList(),
+                "clubs table should exist in the database schema");
     }
 
     @Test
     void usersBelongToClub() {
-        User user = userRepository.findAll().stream().findFirst().orElse(null);
-        if (user == null) {
-            user = userRepository.save(User.builder()
-                    .fullName("Club Test User")
-                    .email("clubtest@test.com")
-                    .passwordHash(passwordEncoder.encode("pass123"))
-                    .role(Role.MEMBER)
-                    .isFinishedBasicTraining(true)
-                    .isOnSchoolTeam(false)
-                    .lessonsAttended(0)
-                    .build());
-        }
-        assertNotNull(user.getClub(), "User should be associated with a club");
+        // Club members are club-scoped; the platform SUPERADMIN deliberately has no club.
+        User member = userRepository.findAll().stream()
+                .filter(u -> u.getRole() != Role.SUPERADMIN)
+                .findFirst()
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .club(testClub)
+                        .fullName("Club Test User")
+                        .email("clubtest@test.com")
+                        .passwordHash(passwordEncoder.encode("pass123"))
+                        .role(Role.MEMBER)
+                        .isFinishedBasicTraining(true)
+                        .isOnSchoolTeam(false)
+                        .lessonsAttended(0)
+                        .build()));
+        assertNotNull(member.getClub(), "A club member should be associated with a club");
     }
 
     @Test
@@ -121,15 +123,15 @@ class ClubMultiTenancyTest {
 
     @Test
     void existingDataMigratedToDefaultClub() {
+        // Every club-scoped user must have a club. The platform SUPERADMIN is the only
+        // intentional exception (it is not owned by any single club).
         List<User> users = userRepository.findAll();
-        boolean allHaveClub = users.stream().allMatch(u -> u.getClub() != null);
-        assertTrue(allHaveClub, "All existing users should be migrated to a default club");
+        boolean allClubUsersHaveClub = users.stream()
+                .filter(u -> u.getRole() != Role.SUPERADMIN)
+                .allMatch(u -> u.getClub() != null);
+        assertTrue(allClubUsersHaveClub, "All club-scoped users should belong to a club");
     }
 
-    @SuppressWarnings("unchecked")
-    private jakarta.persistence.EntityManager getEntityManagerFromContext() {
-        return org.springframework.test.util.ReflectionTestUtils
-                .invokeMethod(userRepository, "getClass")
-                != null ? null : null;
-    }
+    @PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 }

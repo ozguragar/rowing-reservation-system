@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -48,6 +49,29 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void clubsEndpointIsPublicAndListsClubs() throws Exception {
+        mockMvc.perform(get("/api/auth/clubs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").exists())
+                .andExpect(jsonPath("$[0].name").exists());
+    }
+
+    @Test
+    void registerIgnoresClientSuppliedRole() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "fullName", "Role Spoof",
+                                "email", "ctrl_rolespoof@test.com",
+                                "password", "password1",
+                                "role", "CLUB_ADMIN"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.role").value("MEMBER"));
     }
 
     @Test

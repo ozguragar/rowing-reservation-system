@@ -30,6 +30,8 @@ class SessionServiceTest {
     @Autowired private RowingSessionRepository sessionRepository;
     @Autowired private BoatRepository boatRepository;
     @Autowired private ClubRepository clubRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private BookingRepository bookingRepository;
 
     private Club testClub;
 
@@ -155,6 +157,66 @@ class SessionServiceTest {
     }
 
     @Test
+    void getApprovedUpcomingSessionsAssemblesBoatsAndBookings() {
+        LocalDate future = LocalDate.now().plusDays(OFFSET + 33);
+        RowingSession session = makeSession(future);
+        sessionService.approveSession(session.getId());
+
+        Boat boat = boatRepository.save(Boat.builder()
+                .session(session).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(1).name("Batched 4x").build());
+
+        User member = userRepository.save(User.builder()
+                .club(testClub).fullName("Batched Rower").email("batched_rower@test.com")
+                .passwordHash("x").role(Role.MEMBER).memberType(MemberType.DEFAULT)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).isCox(false)
+                .build());
+        bookingRepository.save(Booking.builder()
+                .user(member).boat(boat).session(session)
+                .status(BookingStatus.MANUAL).isCoxSeat(false).build());
+
+        var upcoming = sessionService.getApprovedUpcomingSessions(testClub.getId());
+
+        var dto = upcoming.stream().filter(s -> s.getId().equals(session.getId())).findFirst().orElseThrow();
+        assertEquals(1, dto.getBoats().size());
+        var boatDto = dto.getBoats().get(0);
+        assertEquals("Batched 4x", boatDto.getName());
+        assertEquals(1, boatDto.getBookings().size());
+        assertEquals("Batched Rower", boatDto.getBookings().get(0).getUserFullName());
+    }
+
+    @Test
+    void getApprovedUpcomingSessionsScopedToClub() {
+        Club otherClub = clubRepository.save(Club.builder()
+                .name("Other SessionService Club")
+                .featureAvailabilityModule(true).featureCancellationRequests(true)
+                .featureAutoScheduler(true).featureShowBookedMembers(true).build());
+
+        RowingSession mine = makeSession(LocalDate.now().plusDays(OFFSET + 34));
+        sessionService.approveSession(mine.getId());
+
+        CreateSessionRequest req = new CreateSessionRequest();
+        req.setDate(LocalDate.now().plusDays(OFFSET + 34));
+        req.setStartTime(LocalTime.of(8, 0));
+        req.setEndTime(LocalTime.of(9, 0));
+        var otherDto = sessionService.createSession(req, otherClub);
+        sessionService.approveSession(otherDto.getId());
+
+        var mineList = sessionService.getApprovedUpcomingSessions(testClub.getId());
+        assertTrue(mineList.stream().anyMatch(s -> s.getId().equals(mine.getId())));
+        assertTrue(mineList.stream().noneMatch(s -> s.getId().equals(otherDto.getId())));
+    }
+
+    @Test
+    void getApprovedUpcomingSessionsEmptyWhenNoneApproved() {
+        Club emptyClub = clubRepository.save(Club.builder()
+                .name("Empty SessionService Club")
+                .featureAvailabilityModule(true).featureCancellationRequests(true)
+                .featureAutoScheduler(true).featureShowBookedMembers(true).build());
+        assertTrue(sessionService.getApprovedUpcomingSessions(emptyClub.getId()).isEmpty());
+    }
+
+    @Test
     void deleteSessionWithNoBookingsSucceeds() {
         RowingSession session = makeSession(LocalDate.now().plusDays(OFFSET + 40));
         Long id = session.getId();
@@ -169,5 +231,71 @@ class SessionServiceTest {
         sessionService.bulkDeleteSessions(List.of(s1.getId(), s2.getId()));
         assertFalse(sessionRepository.existsById(s1.getId()));
         assertFalse(sessionRepository.existsById(s2.getId()));
+    }
+
+    @Test
+    void deleteSessionWithActiveBookingsThrows() {
+        RowingSession s = makeSession(LocalDate.now().plusDays(OFFSET + 43));
+        boatRepository.save(Boat.builder()
+                .session(s).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(2).name("Busy 4x").build());
+        assertThrows(BusinessException.class, () -> sessionService.deleteSession(s.getId()));
+    }
+
+    @Test
+    void deleteBoatWithActiveBookingsThrows() {
+        RowingSession s = makeSession(LocalDate.now().plusDays(OFFSET + 44));
+        Boat boat = boatRepository.save(Boat.builder()
+                .session(s).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(false).currentBookings(1).name("Busy boat").build());
+        assertThrows(BusinessException.class, () -> sessionService.deleteBoat(boat.getId()));
+    }
+
+    @Test
+    void olympicBoatInvalidCapacityThrows() {
+        RowingSession s = makeSession(LocalDate.now().plusDays(OFFSET + 45));
+        AddBoatRequest req = new AddBoatRequest();
+        req.setType("OLYMPIC");
+        req.setCapacity(3); // olympic allows 1,2,4,8
+        assertThrows(BusinessException.class, () -> sessionService.addBoatToSession(s.getId(), req));
+    }
+
+    @Test
+    void addBoatGeneratesNameWhenNull() {
+        RowingSession s = makeSession(LocalDate.now().plusDays(OFFSET + 46));
+        AddBoatRequest req = new AddBoatRequest();
+        req.setType("COASTAL");
+        req.setCapacity(2);
+        // name intentionally null
+        var boat = sessionService.addBoatToSession(s.getId(), req);
+        assertNotNull(boat.getName());
+        assertTrue(boat.getName().toLowerCase().contains("coastal"));
+    }
+
+    @Test
+    void getSessionWithBoatsByIdAssemblesBookings() {
+        RowingSession s = makeSession(LocalDate.now().plusDays(OFFSET + 47));
+        Boat boat = boatRepository.save(Boat.builder()
+                .session(s).type(BoatType.COASTAL).capacity(4)
+                .isBasicTrainingBoat(true).currentBookings(1).name("Single 4x").build());
+        User u = userRepository.save(User.builder()
+                .club(testClub).fullName("Single Rower").email("single_rower@test.com")
+                .passwordHash("x").role(Role.MEMBER).memberType(MemberType.DEFAULT)
+                .isFinishedBasicTraining(true).isOnSchoolTeam(false).lessonsAttended(0).isCox(false).build());
+        bookingRepository.save(Booking.builder()
+                .user(u).boat(boat).session(s).status(BookingStatus.MANUAL).isCoxSeat(false).build());
+
+        var dto = sessionService.getSessionWithBoats(s.getId());
+        assertEquals(1, dto.getBoats().size());
+        assertEquals(1, dto.getBoats().get(0).getBookings().size());
+    }
+
+    @Test
+    void bulkApproveApprovesAllGiven() {
+        RowingSession s1 = makeSession(LocalDate.now().plusDays(OFFSET + 48));
+        RowingSession s2 = makeSession(LocalDate.now().plusDays(OFFSET + 49));
+        var approved = sessionService.bulkApprove(List.of(s1.getId(), s2.getId()));
+        assertEquals(2, approved.size());
+        assertTrue(approved.stream().allMatch(d -> "APPROVED".equals(d.getStatus())));
     }
 }
